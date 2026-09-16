@@ -104,7 +104,6 @@ With the development dependencies installed:
 ```sh
 python -m pytest --cov=argly --cov-branch
 python -m ruff check .
-python -m ruff format --check .
 python -m mypy
 python -m build --outdir dist/release
 python -m twine check --strict dist/release/*

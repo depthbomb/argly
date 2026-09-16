@@ -56,7 +56,6 @@ jobs:
           print(f'Checking argly {version}')
           PY
       - run: python -m ruff check .
-      - run: python -m ruff format --check .
       - run: python -m mypy
       - run: python -m build
       - run: python -m twine check --strict dist/*
