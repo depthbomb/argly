@@ -9,6 +9,7 @@ from argly.declarations import Option, Flag, Count, Argument, Inherited
 from inspect import Parameter, signature, cleandoc, iscoroutinefunction
 from typing import Any, Union, Literal, Optional, Annotated, get_args, get_origin, get_type_hints
 
+
 def _shape(annotation: Any) -> tuple[str, bool, bool, Optional[list[Any]]]:
     nullable = False
     origin = get_origin(annotation)
@@ -37,13 +38,14 @@ def _shape(annotation: Any) -> tuple[str, bool, bool, Optional[list[Any]]]:
     kind = supported.get(annotation)
     if kind is None:
         raise ValueError(
-                f'unsupported CLI annotation {annotation!r}; use str, int, float, bool, Path, Literal, Optional, or list'
+            f'unsupported CLI annotation {annotation!r}; use str, int, float, bool, Path, Literal, Optional, or list'
         )
 
     if nullable and multiple:
         raise ValueError('use list[T] with an empty default instead of Optional[list[T]]')
 
     return kind, multiple, nullable, choices
+
 
 def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
     if value is None and nullable:
@@ -67,6 +69,7 @@ def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
 
     return value
 
+
 def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     declaration = getattr(function, '__argly__', None)
     if declaration is None:
@@ -86,12 +89,12 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
     inherited = []
     for parameter in signature(function).parameters.values():
         if parameter.kind in (
-                Parameter.POSITIONAL_ONLY,
-                Parameter.VAR_POSITIONAL,
-                Parameter.VAR_KEYWORD,
+            Parameter.POSITIONAL_ONLY,
+            Parameter.VAR_POSITIONAL,
+            Parameter.VAR_KEYWORD,
         ):
             raise ValueError(
-                    f'{path!r}: positional-only parameters, *args, and **kwargs are unsupported'
+                f'{path!r}: positional-only parameters, *args, and **kwargs are unsupported'
             )
 
         annotation = hints.get(parameter.name)
@@ -108,20 +111,20 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
         if isinstance(marker, Inherited):
             if parameter.default is not Parameter.empty:
                 raise ValueError(
-                        f'{parameter.name}: Inherited() takes its default from the ancestor'
+                    f'{parameter.name}: Inherited() takes its default from the ancestor'
                 )
 
             source = marker.name or parameter.name
             entry['bindings'][parameter.name] = source
             inherited.append(
-                    {
-                        'parameter': parameter.name,
-                        'source': source,
-                        'type': kind,
-                        'multiple': multiple,
-                        'nullable': nullable,
-                        'choices': choices,
-                    }
+                {
+                    'parameter': parameter.name,
+                    'source': source,
+                    'type': kind,
+                    'multiple': multiple,
+                    'nullable': nullable,
+                    'choices': choices,
+                }
             )
             continue
 
@@ -147,7 +150,7 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
 
         if isinstance(marker, (Flag, Count)) and choices is not None:
             raise ValueError(
-                    f'{parameter.name}: choices apply to value options, not flags or counters'
+                f'{parameter.name}: choices apply to value options, not flags or counters'
             )
 
         if choices is not None and not required and default is not None:
@@ -190,11 +193,12 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
 
     return entry, inherited
 
+
 def build_registry(
-        name: str,
-        commands: Iterable[Callable[..., Any]],
-        *,
-        windows_options: bool = False,
+    name: str,
+    commands: Iterable[Callable[..., Any]],
+    *,
+    windows_options: bool = False,
 ) -> dict[str, Any]:
     """Resolve signatures and inheritance once, producing portable parser metadata."""
     entries: dict[str, dict[str, Any]] = {}
@@ -230,7 +234,7 @@ def build_registry(
             for field in ('type', 'multiple', 'nullable'):
                 if source[field] != request[field]:
                     raise ValueError(
-                            f'{path!r}: inherited parameter {request["parameter"]!r} has a different type'
+                        f'{path!r}: inherited parameter {request["parameter"]!r} has a different type'
                     )
 
             if request['choices'] is not None and request['choices'] != source['choices']:
@@ -244,6 +248,7 @@ def build_registry(
     }
 
     return validate_registry(registry)
+
 
 def discover(package: str) -> list[Callable[..., Any]]:
     """Find decorated module-level functions in a package, in stable module order."""
@@ -259,10 +264,10 @@ def discover(package: str) -> list[Callable[..., Any]]:
     for module in modules:
         for _, value in sorted(vars(module).items()):
             if (
-                    callable(value)
-                    and getattr(value, '__module__', None) == module.__name__
-                    and hasattr(value, '__argly__')
-                    and id(value) not in seen
+                callable(value)
+                and getattr(value, '__module__', None) == module.__name__
+                and hasattr(value, '__argly__')
+                and id(value) not in seen
             ):
                 found.append(value)
                 seen.add(id(value))

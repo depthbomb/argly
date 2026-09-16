@@ -6,6 +6,7 @@ from argly.schema import validate_registry
 from collections.abc import Callable, Iterable, Sequence
 from argly._parser import Node, UsageError, ParseResult, parse
 
+
 class Invocation:
     """A parsed invocation. Parsing does not import the selected handler."""
 
@@ -25,18 +26,19 @@ class Invocation:
         )
         self._node = result.node
 
+
 class App:
     """A compiled command tree. Reuse it to avoid rebuilding parser tables."""
 
     __slots__ = ('name', 'registry', '_nodes', '_root', '_help_lookup', '_handlers')
 
     def __init__(
-            self,
-            name: str,
-            commands: Iterable[Callable[..., Any]] = (),
-            *,
-            windows_options: bool = False,
-            help_lookup: Optional[Callable[[str], Optional[str]]] = None,
+        self,
+        name: str,
+        commands: Iterable[Callable[..., Any]] = (),
+        *,
+        windows_options: bool = False,
+        help_lookup: Optional[Callable[[str], Optional[str]]] = None,
     ) -> None:
         from argly.compiler import build_registry
 
@@ -54,11 +56,11 @@ class App:
         return Invocation(parse(self._root, list(args)))
 
     def run(
-            self,
-            args: Optional[Sequence[str]] = None,
-            *,
-            out: Optional[TextIO] = None,
-            err: Optional[TextIO] = None,
+        self,
+        args: Optional[Sequence[str]] = None,
+        *,
+        out: Optional[TextIO] = None,
+        err: Optional[TextIO] = None,
     ) -> int:
         """Return a handler's exit status, 0 for help, or 2 for usage errors."""
         output = sys.stdout if out is None else out
@@ -110,10 +112,10 @@ class App:
 
     @classmethod
     def from_registry(
-            cls,
-            registry: dict[str, Any],
-            *,
-            help_lookup: Optional[Callable[[str], Optional[str]]] = None,
+        cls,
+        registry: dict[str, Any],
+        *,
+        help_lookup: Optional[Callable[[str], Optional[str]]] = None,
     ) -> App:
         """Load generated metadata without discovering or importing command modules."""
         app = cls.__new__(cls)
@@ -129,9 +131,9 @@ class App:
         return cls(name, discover(package), windows_options=windows_options)
 
     def _initialize(
-            self,
-            registry: dict[str, Any],
-            help_lookup: Optional[Callable[[str], Optional[str]]],
+        self,
+        registry: dict[str, Any],
+        help_lookup: Optional[Callable[[str], Optional[str]]],
     ) -> None:
         self.registry = validate_registry(registry)
         self.name: str = self.registry['name']

@@ -7,7 +7,7 @@ name = "argly"
 version = "0.1.0"
 description = "A fast, module-oriented command-line framework with lazy handlers."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = []
@@ -18,9 +18,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
@@ -57,7 +54,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-config --strict-markers"
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
@@ -69,9 +66,10 @@ ignore = ["UP045"]
 
 [tool.ruff.format]
 quote-style = "single"
+line-ending = "lf"
 exclude = ["examples/remote_cli/generated.py"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 strict = true
 files = ["argly"]

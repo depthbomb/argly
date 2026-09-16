@@ -19,7 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        python: ['3.11', '3.12', '3.13', '3.14']
     defaults:
       run:
         shell: bash
@@ -29,7 +28,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: '3.14'
       - name: Create virtual environment
         run: python -m venv .venv
       - name: Select virtual environment
@@ -83,7 +82,7 @@ jobs:
           python -m pytest --import-mode=importlib --cov=argly --cov-branch
       - run: python -m pip check
       - name: Save validated distributions
-        if: runner.os == 'Linux' && matrix.python == '3.14'
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: python-distributions

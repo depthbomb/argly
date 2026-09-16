@@ -1,5 +1,7 @@
 # argly
 
+Requires Python 3.14 or newer.
+
 ```sh
 python -m pip install argly
 ```
@@ -23,27 +25,27 @@ from typing import Annotated
 from argly import Flag, Count, Option, Argument, Inherited, group, command
 
 
-@group("remote", summary="Manage remotes.")
-def remote(*, verbose: Annotated[int, Count("-v")] = 0) -> None:
+@group('remote', summary='Manage remotes.')
+def remote(*, verbose: Annotated[int, Count('-v')] = 0) -> None:
     pass
 
 
-@command("remote add", summary="Add a remote.")
+@command('remote add', summary='Add a remote.')
 def add(
     name: Annotated[str, Argument()],
     *,
-    url: Annotated[str, Option("-u")],
+    url: Annotated[str, Option('-u')],
     verbose: Annotated[int, Inherited()],
-    force: Annotated[bool, Flag("-f")] = False,
+    force: Annotated[bool, Flag('-f')] = False,
 ) -> int:
-    print(f"Adding {name}: {url}, force={force}, verbosity={verbose}")
+    print(f'Adding {name}: {url}, force={force}, verbosity={verbose}')
 
     return 0
 
 
-@command("remote list", summary="List remotes.")
+@command('remote list', summary='List remotes.')
 def list_remotes(*, verbose: Annotated[int, Inherited()]) -> int:
-    print(f"Listing remotes at verbosity {verbose}")
+    print(f'Listing remotes at verbosity {verbose}')
 
     return 0
 ```
@@ -91,7 +93,7 @@ Generation imports your command modules to read their definitions. At runtime, o
 
 Regenerate after changing command definitions. Add `--check` to the same generation command in CI to catch stale output without rewriting it. `python -m argly gen` works too.
 
-While experimenting, you can skip generation and use `App.discover("mycli", "mycli.commands").run()`. That imports the command modules up front.
+While experimenting, you can skip generation and use `App.discover('mycli', 'mycli.commands').run()`. That imports the command modules up front.
 
 ## Performance and development
 

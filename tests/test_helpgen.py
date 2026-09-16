@@ -8,9 +8,11 @@ from argly.helpgen import source, generate
 
 PROJECT = Path(__file__).resolve().parents[1]
 
+
 @pytest.fixture
 def example():
     return App.discover('tool', 'examples.remote_cli.commands', windows_options=True)
+
 
 def test_generated_help_matches_every_page_and_has_no_imports(example):
     generated = source(example)
@@ -23,6 +25,7 @@ def test_generated_help_matches_every_page_and_has_no_imports(example):
 
     assert namespace['get_help']('missing') is None
     assert namespace['REGISTRY'] == example.registry
+
 
 def test_generation_is_stable_atomic_and_check_does_not_write(example, tmp_path):
     output = tmp_path / 'generated.py'
@@ -39,8 +42,10 @@ def test_generation_is_stable_atomic_and_check_does_not_write(example, tmp_path)
     assert generate(example, output)
     assert list(tmp_path.iterdir()) == [output]
 
+
 def test_help_only_has_no_registry(example):
     assert 'REGISTRY' not in source(example, help_only=True)
+
 
 def test_generated_help_does_not_import_command_modules_or_renderer():
     script = """
@@ -56,6 +61,7 @@ assert not any(name.startswith('examples.remote_cli.commands') for name in sys.m
     result = run([sys.executable, '-c', script], cwd=PROJECT, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert 'Usage: tool remote add' in result.stdout
+
 
 def test_related_commands_share_a_lazy_module_and_cache_handlers_separately():
     script = """
@@ -84,6 +90,7 @@ assert app._handlers == {
     assert result.stdout.count('name=origin') == 2
     assert result.stdout.count('No remotes configured (verbosity 2).') == 1
 
+
 def test_cli_generate_check_and_staleness(tmp_path):
     output = tmp_path / 'help.py'
     args = [
@@ -107,6 +114,7 @@ def test_cli_generate_check_and_staleness(tmp_path):
     assert result.returncode == 1
     assert 'stale' in result.stderr
 
+
 def test_strings_are_escaped_as_python_literals():
     @command('', summary='Quotes \' " and \\ slash\nUnicode cafÃ© ðŸš€\n\x00')
     def local() -> int:
@@ -119,8 +127,10 @@ def test_strings_are_escaped_as_python_literals():
     with pytest.raises(ValueError, match='module-level'):
         source(app)
 
+
 def test_committed_example_is_fresh(example):
     assert generate(example, PROJECT / 'examples/remote_cli/generated.py', check=True)
+
 
 def test_console_entry_point_discovers_packages_from_working_directory(tmp_path):
     executable = Path(sys.executable).with_name('argly.exe' if sys.platform == 'win32' else 'argly')
@@ -128,39 +138,40 @@ def test_console_entry_point_discovers_packages_from_working_directory(tmp_path)
         pytest.skip('console entry point requires an installed argly package')
 
     result = run(
-            [
-                str(executable),
-                'gen',
-                '--package',
-                'examples.remote_cli.commands',
-                '--name',
-                'tool',
-                '--output',
-                str(tmp_path / 'generated.py'),
-            ],
-            cwd=PROJECT,
-            capture_output=True,
-            text=True,
+        [
+            str(executable),
+            'gen',
+            '--package',
+            'examples.remote_cli.commands',
+            '--name',
+            'tool',
+            '--output',
+            str(tmp_path / 'generated.py'),
+        ],
+        cwd=PROJECT,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / 'generated.py').exists()
 
+
 @pytest.mark.parametrize(
-        ('arguments', 'code', 'message'),
-        [
-            (['--help'], 0, 'gen'),
-            (['gen', '--help'], 0, 'usage: argly gen'),
-            ([], 2, 'command'),
-            (['unknown'], 2, 'invalid choice'),
-            (['gen'], 2, '--package'),
-        ],
+    ('arguments', 'code', 'message'),
+    [
+        (['--help'], 0, 'gen'),
+        (['gen', '--help'], 0, 'usage: argly gen'),
+        ([], 2, 'command'),
+        (['unknown'], 2, 'invalid choice'),
+        (['gen'], 2, '--package'),
+    ],
 )
 def test_cli_routing_and_help(arguments, code, message):
     result = run(
-            [sys.executable, '-m', 'argly', *arguments],
-            cwd=PROJECT,
-            capture_output=True,
-            text=True,
+        [sys.executable, '-m', 'argly', *arguments],
+        cwd=PROJECT,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == code
     assert message in result.stdout + result.stderr

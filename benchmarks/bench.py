@@ -10,15 +10,16 @@ from typing import Annotated, Optional
 from importlib.util import module_from_spec, spec_from_file_location
 from argly import App, Flag, Count, Option, Argument, Inherited, command, group
 
+
 def _flat():
     @command('')
     def flat(
-            name: Annotated[str, Argument()],
-            *,
-            verbose: Annotated[int, Count('-v')] = 0,
-            force: Annotated[bool, Flag('-f')] = False,
-            limit: Annotated[int, Option('-l')] = 10,
-            output: Annotated[Optional[str], Option('-o')] = None,
+        name: Annotated[str, Argument()],
+        *,
+        verbose: Annotated[int, Count('-v')] = 0,
+        force: Annotated[bool, Flag('-f')] = False,
+        limit: Annotated[int, Option('-l')] = 10,
+        output: Annotated[Optional[str], Option('-o')] = None,
     ) -> int:
         return 0
 
@@ -34,6 +35,7 @@ def _flat():
 
     return app, parser, tokens
 
+
 def _nested():
     @group('')
     def root(*, verbose: Annotated[int, Count('-v')] = 0) -> None:
@@ -41,10 +43,10 @@ def _nested():
 
     @command('remote add')
     def add(
-            name: Annotated[str, Argument()],
-            *,
-            url: Annotated[str, Option('-u')],
-            verbose: Annotated[int, Inherited()],
+        name: Annotated[str, Argument()],
+        *,
+        url: Annotated[str, Option('-u')],
+        verbose: Annotated[int, Inherited()],
     ) -> int:
         return verbose
 
@@ -59,6 +61,7 @@ def _nested():
     assert app.parse(tokens).kwargs == vars(parser.parse_args(tokens))
 
     return app, parser, tokens
+
 
 def _wide():
     @command('command0')
@@ -80,6 +83,7 @@ def _wide():
 
     return app, parser, tokens
 
+
 def _startup(script, rounds):
     measured = 'from time import perf_counter_ns; start=perf_counter_ns(); ' + script
     measured += '; print((perf_counter_ns()-start)/1e6)'
@@ -88,6 +92,7 @@ def _startup(script, rounds):
     ]
 
     return {'median_ms': median(samples), 'samples_ms': samples}
+
 
 def _compare_backends(loops, rounds):
     native = sys.modules['argly._parser']
@@ -132,9 +137,10 @@ def _compare_backends(loops, rounds):
 
     return results
 
+
 def main():
     parser = ArgumentParser(
-            description='Compare equivalent warm parses and measure fresh-process startup.'
+        description='Compare equivalent warm parses and measure fresh-process startup.'
     )
     parser.add_argument('--loops', type=int, default=10000)
     parser.add_argument('--rounds', type=int, default=7)
@@ -148,12 +154,12 @@ def main():
             reference.parse_args(tokens)
 
         argly = repeat(
-                lambda app=app, tokens=tokens: app.parse(tokens), number=args.loops, repeat=args.rounds
+            lambda app=app, tokens=tokens: app.parse(tokens), number=args.loops, repeat=args.rounds
         )
         argparse = repeat(
-                lambda reference=reference, tokens=tokens: reference.parse_args(tokens),
-                number=args.loops,
-                repeat=args.rounds,
+            lambda reference=reference, tokens=tokens: reference.parse_args(tokens),
+            number=args.loops,
+            repeat=args.rounds,
         )
         results['cases'][name] = {
             'argly_us': median(argly) * 1e6 / args.loops,
@@ -179,13 +185,13 @@ def main():
         'import_argly': _startup('import argly', args.rounds),
         'import_argparse': _startup('import argparse', args.rounds),
         'generated_app': _startup(
-                'from argly import App; from examples.remote_cli.generated import REGISTRY, get_help; '
-                'app=App.from_registry(REGISTRY, help_lookup=get_help)',
-                args.rounds,
+            'from argly import App; from examples.remote_cli.generated import REGISTRY, get_help; '
+            'app=App.from_registry(REGISTRY, help_lookup=get_help)',
+            args.rounds,
         ),
         'discovered_app': _startup(
-                "from argly import App; app=App.discover('tool', 'examples.remote_cli.commands', windows_options=True)",
-                args.rounds,
+            "from argly import App; app=App.discover('tool', 'examples.remote_cli.commands', windows_options=True)",
+            args.rounds,
         ),
     }
     results['parser_module'] = sys.modules['argly._parser'].__file__
@@ -196,6 +202,7 @@ def main():
         args.output.write_text(output + '\n', encoding='utf-8')
 
     print(output)
+
 
 if __name__ == '__main__':
     main()

@@ -10,6 +10,7 @@ from sys import path as module_path
 from collections.abc import Sequence
 from tempfile import NamedTemporaryFile
 
+
 def _rows(items: list[tuple[str, str]]) -> list[str]:
     width = min(max((len(label) for label, _ in items), default=0), 36)
     rows = []
@@ -20,6 +21,7 @@ def _rows(items: list[tuple[str, str]]) -> list[str]:
             rows.append(f'  {label:<{width}}  {description}'.rstrip())
 
     return rows
+
 
 def render(name: str, node: Node) -> str:
     """Render one help page from compiled metadata without importing handlers."""
@@ -39,12 +41,12 @@ def render(name: str, node: Node) -> str:
     if node.children:
         lines.extend(('', 'Commands:'))
         lines.extend(
-                _rows(
-                        [
-                            (name, child.summary.splitlines()[0] if child.summary else '')
-                            for name, child in sorted(node.children.items())
-                        ]
-                )
+            _rows(
+                [
+                    (name, child.summary.splitlines()[0] if child.summary else '')
+                    for name, child in sorted(node.children.items())
+                ]
+            )
         )
 
     if node.arguments:
@@ -86,6 +88,7 @@ def render(name: str, node: Node) -> str:
 
     return '\n'.join(lines) + '\n'
 
+
 def source(app: App, *, help_only: bool = False) -> str:
     """Generate an import-free module with static help and optional registry data."""
     if not help_only:
@@ -105,6 +108,7 @@ def source(app: App, *, help_only: bool = False) -> str:
     lines.extend(('}', '', '', 'def get_help(path):', '    return HELP.get(path)', ''))
 
     return '\n'.join(lines)
+
 
 def generate(app: App, output: Path, *, check: bool = False, help_only: bool = False) -> bool:
     """Write atomically, or check freshness. Return False for stale check output."""
@@ -127,7 +131,7 @@ def generate(app: App, output: Path, *, check: bool = False, help_only: bool = F
     temporary: Optional[Path] = None
     try:
         with NamedTemporaryFile(
-                dir=output.parent, prefix='.argly-', suffix='.tmp', delete=False
+            dir=output.parent, prefix='.argly-', suffix='.tmp', delete=False
         ) as stream:
             temporary = Path(stream.name)
             stream.write(data)
@@ -142,18 +146,19 @@ def generate(app: App, output: Path, *, check: bool = False, help_only: bool = F
 
     return True
 
+
 def main(args: Optional[Sequence[str]] = None, *, prog: Optional[str] = None) -> int:
     """Discover command definitions and generate a standalone Python module."""
     parser = ArgumentParser(
-            prog=prog, description='Generate static argly help and a lazy command registry.'
+        prog=prog, description='Generate static argly help and a lazy command registry.'
     )
     parser.add_argument(
-            '--package', required=True, help='Importable package containing command modules'
+        '--package', required=True, help='Importable package containing command modules'
     )
     parser.add_argument('--name', required=True, help='Application name displayed in help')
     parser.add_argument('--output', type=Path, required=True, help='Generated .py module')
     parser.add_argument(
-            '--windows-options', action='store_true', help='Enable explicit slash aliases'
+        '--windows-options', action='store_true', help='Enable explicit slash aliases'
     )
     parser.add_argument('--help-only', action='store_true', help='Omit command registry metadata')
     parser.add_argument('--check', action='store_true', help='Check freshness without writing')
@@ -176,6 +181,7 @@ def main(args: Optional[Sequence[str]] = None, *, prog: Optional[str] = None) ->
         parser.exit(1, f'argly gen: {options.output} is missing or stale; regenerate it\n')
 
     return 0
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

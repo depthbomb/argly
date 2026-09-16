@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any
 from copy import deepcopy
 
+
 def _validate_spelling(name: str) -> None:
     if not isinstance(name, str) or '=' in name or any(char.isspace() for char in name):
         raise ValueError(f'invalid option spelling {name!r}')
@@ -17,6 +18,7 @@ def _validate_spelling(name: str) -> None:
 
     if not valid:
         raise ValueError(f'invalid option spelling {name!r}')
+
 
 def _validate_value(spec: dict[str, Any]) -> None:
     dest = spec['dest']
@@ -36,6 +38,7 @@ def _validate_value(spec: dict[str, Any]) -> None:
     choices = spec['choices']
     if choices is not None and (not isinstance(choices, (list, tuple)) or not choices):
         raise ValueError(f'{dest}: choices must be nonempty')
+
 
 def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
     """Validate and detach a versioned registry before constructing parser tables."""
@@ -74,7 +77,7 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
 
         if parent is not None and parent['arguments']:
             raise ValueError(
-                    f'commands with children cannot declare positional arguments: {parent_path!r}'
+                f'commands with children cannot declare positional arguments: {parent_path!r}'
             )
 
         handler = entry['handler']
@@ -138,9 +141,9 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
 
         for parameter, source in entry['bindings'].items():
             if (
-                    not isinstance(parameter, str)
-                    or not parameter.isidentifier()
-                    or source not in available
+                not isinstance(parameter, str)
+                or not parameter.isidentifier()
+                or source not in available
             ):
                 raise ValueError(f'{path!r}: invalid parameter binding {parameter!r}')
 
@@ -150,6 +153,7 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
     data['commands'] = list(seen.values())
 
     return data
+
 
 def empty_command(path: str) -> dict[str, Any]:
     return {

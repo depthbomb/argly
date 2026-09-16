@@ -1,8 +1,10 @@
 from __future__ import annotations
 from typing import Any, Optional
 
+
 class UsageError(ValueError):
     """An invalid invocation, reported by App.run with exit status 2."""
+
 
 class ParseResult:
     __slots__ = ('node', 'values', 'help_requested')
@@ -11,6 +13,7 @@ class ParseResult:
         self.node = node
         self.values = values
         self.help_requested = help_requested
+
 
 class Node:
     __slots__ = (
@@ -55,8 +58,9 @@ class Node:
             argument['default'] = _default_value(argument)
 
         self.mutable_defaults = tuple(
-                dest for dest, default in self.defaults.items() if isinstance(default, list)
+            dest for dest, default in self.defaults.items() if isinstance(default, list)
         )
+
 
 def _default_value(spec: dict[str, Any]) -> Any:
     default = spec['default']
@@ -67,6 +71,7 @@ def _default_value(spec: dict[str, Any]) -> Any:
         return _convert(default, spec)
 
     return default
+
 
 def _convert(value: str, spec: dict[str, Any]) -> Any:
     kind = spec['type']
@@ -93,6 +98,7 @@ def _convert(value: str, spec: dict[str, Any]) -> Any:
 
     return result
 
+
 def _store(values: dict[str, Any], spec: dict[str, Any], value: Optional[str]) -> None:
     dest = spec['dest']
     action = spec['action']
@@ -111,6 +117,7 @@ def _store(values: dict[str, Any], spec: dict[str, Any], value: Optional[str]) -
         else:
             values[dest] = converted
 
+
 def _looks_like_option(value: str, node: Node) -> bool:
     if value == '--' or value in ('--help', '-h'):
         return True
@@ -122,6 +129,7 @@ def _looks_like_option(value: str, node: Node) -> bool:
             return True
 
     return node.windows_options and value.partition('=')[0] in node.lookup
+
 
 def parse(root: Node, argv: list[str]) -> ParseResult:
     node = root
@@ -159,7 +167,7 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
             if not equal:
                 if index == size or _looks_like_option(argv[index], node):
                     raise UsageError(
-                            f"{name} requires a value (use {name}=VALUE for a value starting with '-')"
+                        f"{name} requires a value (use {name}=VALUE for a value starting with '-')"
                     )
 
                 attached = argv[index]
@@ -173,10 +181,10 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
 
         negative_number = False
         if (
-                token.startswith('-')
-                and len(token) > 1
-                and (token[1].isdigit() or token[1] == '.')
-                and node.arguments
+            token.startswith('-')
+            and len(token) > 1
+            and (token[1].isdigit() or token[1] == '.')
+            and node.arguments
         ):
             try:
                 float(token)
