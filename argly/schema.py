@@ -1,0 +1,162 @@
+from __future__ import annotations
+from typing import Any
+from copy import deepcopy
+
+def _validate_spelling(name: str) -> None:
+    if not isinstance(name, str) or '=' in name or any(char.isspace() for char in name):
+        raise ValueError(f'invalid option spelling {name!r}')
+
+    if name.startswith('--'):
+        valid = len(name) > 2 and not name[2:].startswith(('-', '/'))
+    elif name.startswith('-'):
+        valid = len(name) == 2 and name[1].isascii() and name[1].isalpha()
+    elif name.startswith('/'):
+        valid = len(name) > 1 and '/' not in name[1:]
+    else:
+        valid = False
+
+    if not valid:
+        raise ValueError(f'invalid option spelling {name!r}')
+
+def _validate_value(spec: dict[str, Any]) -> None:
+    dest = spec['dest']
+    if not isinstance(dest, str) or not dest.isidentifier():
+        raise ValueError(f'invalid parameter name {dest!r}')
+
+    if spec['type'] not in ('str', 'int', 'float', 'bool', 'path'):
+        raise ValueError(f'{dest}: unsupported type')
+
+    for field in ('required', 'multiple', 'nullable'):
+        if type(spec[field]) is not bool:
+            raise ValueError(f'{dest}: {field} must be a bool')
+
+    if not isinstance(spec['help'], str) or not isinstance(spec['metavar'], str):
+        raise ValueError(f'{dest}: help and metavar must be strings')
+
+    choices = spec['choices']
+    if choices is not None and (not isinstance(choices, (list, tuple)) or not choices):
+        raise ValueError(f'{dest}: choices must be nonempty')
+
+def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
+    """Validate and detach a versioned registry before constructing parser tables."""
+    data = deepcopy(registry)
+    if data.get('version') != 1:
+        raise ValueError('unsupported argly registry version')
+
+    name = data.get('name')
+    if not isinstance(name, str) or not name or any(char.isspace() for char in name):
+        raise ValueError('application name must be a nonempty word')
+
+    if type(data.get('windows_options')) is not bool:
+        raise ValueError('windows_options must be a bool')
+
+    commands = data.get('commands')
+    if not isinstance(commands, list) or not commands:
+        raise ValueError('registry must contain a root command')
+
+    seen: dict[str, dict[str, Any]] = {}
+    inherited: dict[str, dict[str, dict[str, Any]]] = {}
+    for entry in sorted(commands, key=lambda item: (item['path'].count(' '), item['path'])):
+        path = entry['path']
+        if not isinstance(path, str) or path != ' '.join(path.split()):
+            raise ValueError('invalid command path')
+
+        if any(part.startswith(('-', '/')) for part in path.split()):
+            raise ValueError(f'invalid command path {path!r}')
+
+        if path in seen:
+            raise ValueError(f'duplicate command {path!r}')
+
+        parent_path = path.rpartition(' ')[0]
+        parent = seen.get(parent_path) if path else None
+        if path and parent is None:
+            raise ValueError(f'missing parent for {path!r}')
+
+        if parent is not None and parent['arguments']:
+            raise ValueError(
+                    f'commands with children cannot declare positional arguments: {parent_path!r}'
+            )
+
+        handler = entry['handler']
+        if handler is not None and (not isinstance(handler, str) or ':' not in handler):
+            raise ValueError(f'invalid handler reference for {path!r}')
+
+        if not isinstance(entry['summary'], str):
+            raise ValueError('command summary must be a string')
+
+        scope = inherited[parent_path].copy() if path else {}
+        spellings = {name for option in scope.values() for name in option['names']}
+        spellings.update(('--help', '-h'))
+        for option in entry['options']:
+            _validate_value(option)
+            dest = option['dest']
+            if dest in scope:
+                raise ValueError(f'{path!r}: option {dest!r} shadows an ancestor; use Inherited()')
+
+            names = option['names']
+            if not isinstance(names, (list, tuple)) or not names:
+                raise ValueError(f'{dest}: an option needs at least one name')
+
+            for spelling in names:
+                _validate_spelling(spelling)
+                if spelling in spellings:
+                    raise ValueError(f'{path!r}: duplicate or reserved option {spelling!r}')
+
+                spellings.add(spelling)
+
+            action = option['action']
+            if action not in ('value', 'flag', 'count'):
+                raise ValueError(f'{dest}: unsupported action {action!r}')
+
+            if action != 'value':
+                expected = 'bool' if action == 'flag' else 'int'
+                if option['type'] != expected or option['multiple'] or option['nullable']:
+                    raise ValueError(f'{dest}: {action} requires {expected}')
+
+            scope[dest] = option
+
+        available = dict(scope)
+        optional_seen = False
+        arguments = entry['arguments']
+        for index, argument in enumerate(arguments):
+            _validate_value(argument)
+            dest = argument['dest']
+            if dest in available:
+                raise ValueError(f'{path!r}: duplicate parameter {dest!r}')
+
+            if argument['type'] == 'bool':
+                raise ValueError('boolean positionals are unsupported; use Flag')
+
+            if argument['multiple'] and index != len(arguments) - 1:
+                raise ValueError('a variadic argument must be last')
+
+            if optional_seen and argument['required']:
+                raise ValueError('required arguments must precede optional arguments')
+
+            optional_seen = not argument['required']
+            available[dest] = argument
+
+        for parameter, source in entry['bindings'].items():
+            if (
+                    not isinstance(parameter, str)
+                    or not parameter.isidentifier()
+                    or source not in available
+            ):
+                raise ValueError(f'{path!r}: invalid parameter binding {parameter!r}')
+
+        inherited[path] = scope
+        seen[path] = entry
+
+    data['commands'] = list(seen.values())
+
+    return data
+
+def empty_command(path: str) -> dict[str, Any]:
+    return {
+        'path': path,
+        'summary': '',
+        'handler': None,
+        'options': [],
+        'arguments': [],
+        'bindings': {},
+    }
