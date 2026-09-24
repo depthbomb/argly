@@ -72,7 +72,7 @@ def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
 
 def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     declaration = getattr(function, '__argly__', None)
-    if declaration is None:
+    if not isinstance(declaration, tuple) or len(declaration) != 3:
         raise ValueError(f'{function.__name__} needs @command or @group')
 
     if iscoroutinefunction(function):
@@ -85,7 +85,10 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
 
     entry = empty_command(path)
     entry['summary'] = summary if summary is not None else cleandoc(function.__doc__ or '')
-    entry['handler'] = None if is_group else f'{function.__module__}:{function.__qualname__}'
+    if not is_group:
+        module_name = getattr(function, '__module__')  # noqa: B009
+        entry['handler'] = f'{module_name}:{function.__qualname__}'
+
     inherited = []
     for parameter in signature(function).parameters.values():
         if parameter.kind in (
@@ -154,7 +157,7 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
             )
 
         if choices is not None and not required and default is not None:
-            defaults = default if multiple else [default]
+            defaults = default if isinstance(default, list) else [default]
             if any(item not in choices for item in defaults):
                 raise ValueError(f'{parameter.name}: default is outside the choices')
 

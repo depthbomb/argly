@@ -85,14 +85,16 @@ def _convert(value: str, spec: dict[str, Any]) -> Any:
         elif kind == 'path':
             from pathlib import Path
 
-            result = Path(value)
+            path = Path(value)
+            result = path
+            value = path.as_posix()
         else:
             raise ValueError(f'unsupported value type: {kind}')
     except (ValueError, OverflowError) as error:
         raise UsageError(f'{spec["dest"]}: invalid {kind} value {value!r}') from error
 
     choices = spec['choices']
-    choice_value = result.as_posix() if kind == 'path' else result
+    choice_value = value if kind == 'path' else result
     if choices is not None and choice_value not in choices:
         raise UsageError(f'{spec["dest"]}: choose from {", ".join(map(str, choices))}')
 

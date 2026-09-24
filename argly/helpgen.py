@@ -133,13 +133,14 @@ def generate(app: App, output: Path, *, check: bool = False, help_only: bool = F
         with NamedTemporaryFile(
             dir=output.parent, prefix='.argly-', suffix='.tmp', delete=False
         ) as stream:
-            temporary = Path(stream.name)
+            written_path = Path(stream.name)
+            temporary = written_path
             stream.write(data)
 
         if output.exists():
-            chmod(temporary, output.stat().st_mode)
+            chmod(written_path, output.stat().st_mode)
 
-        replace(temporary, output)
+        replace(written_path, output)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
