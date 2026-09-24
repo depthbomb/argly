@@ -1,7 +1,8 @@
 """Build prepared Python artifacts with separate runtime, help, and metadata.
 
 Use argly gen --prepared --package PACKAGE --name NAME --output generated.py.
-Import generated.load() to construct an app. Ship generated.py and its sibling
+Call generated.main() from the console entry point, or generated.load() to
+construct an app. Ship generated.py and its sibling
 _generated_* modules together. --check verifies every artifact without writing.
 """
 from __future__ import annotations
@@ -88,6 +89,24 @@ def load(*, resources=None):
     from argly import App
 
     return App.from_generated(_module({runtime!r}), help_lookup=get_help, registry_loader=get_registry, resources=resources)
+
+def main(args=None, *, out=None, err=None, resources=None):
+    from sys import argv, stdout
+
+    arguments = list(argv[1:] if args is None else args)
+    if arguments and arguments[-1] in ('--help', '-h'):
+        tokens = arguments[:-1]
+        path = ' '.join(tokens)
+        if path.split() == tokens:
+            text = get_help(path)
+            if text is not None:
+                (stdout if out is None else out).write(text)
+                return 0
+
+    return load(resources=resources).run(arguments, out=out, err=err)
+
+if __name__ == '__main__':
+    raise SystemExit(main())
 '''
 
 def validate_references(registry: dict[str, Any]) -> None:

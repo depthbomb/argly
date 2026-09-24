@@ -2,6 +2,7 @@ import sys
 import pytest
 import random
 from enum import Enum
+from io import StringIO
 from pathlib import Path
 from subprocess import run
 from types import ModuleType
@@ -230,3 +231,63 @@ assert not any(name.endswith(('_metadata', '_help')) for name in sys.modules)
 '''
     result = run([sys.executable, '-c', script], cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+def test_generated_entry_help_does_not_import_argly_or_runtime(tmp_path):
+    app = App('tool', [root, handler])
+    output = tmp_path / 'entry_help.py'
+    generate(app, output)
+    for args, command_path in ((['--help'], ''), (['run', '--help'], 'run'), (['run', '-h'], 'run')):
+        script = f'''
+import sys
+from entry_help import main
+assert main({args!r}) == 0
+assert 'argly' not in sys.modules
+assert not any(name.endswith(('_runtime', '_metadata')) for name in sys.modules)
+'''
+        result = run([sys.executable, '-c', script], cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == app.format_help(command_path)
+    result = run([sys.executable, str(output), 'run', '--help'], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == app.format_help('run')
+
+@pytest.mark.parametrize('tokens', [
+    ['run', '--help'], ['--help', 'run'], ['run', '-vyh'],
+    ['run', '--number=no', '--help'], ['run', '--item=--help'],
+    ['run', '--', '--help'], ['run ', '--help'], [' run', '--help'],
+    ['resources --help'], ['missing', '--help'], ['run', '--help=1'],
+])
+def test_entry_help_fallback_preserves_token_semantics(pair, tmp_path, monkeypatch, tokens):
+    direct, _ = pair
+    output = tmp_path / 'entry_fallback.py'
+    generated_files = artifacts(direct, output)
+    generate(direct, output)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        entry = import_module(output.stem)
+        direct_out, generated_out = StringIO(), StringIO()
+        direct_err, generated_err = StringIO(), StringIO()
+        assert entry.main(tokens, out=generated_out, err=generated_err) == direct.run(tokens, out=direct_out, err=direct_err)
+        assert generated_out.getvalue() == direct_out.getvalue()
+        assert generated_err.getvalue() == direct_err.getvalue()
+    finally:
+        for path in generated_files:
+            sys.modules.pop(path.stem, None)
+
+def test_help_with_a_space_inside_one_token_does_not_select_a_command(tmp_path, monkeypatch):
+    from test_parser import root as parser_root, remote, add, show
+
+    app = App('tool', [parser_root, remote, add, show])
+    output = tmp_path / 'entry_spaces.py'
+    files = artifacts(app, output)
+    generate(app, output)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        entry = import_module(output.stem)
+        errors = StringIO()
+        assert entry.main(['remote show', '--help'], err=errors) == 2
+        assert 'unknown command' in errors.getvalue()
+        assert entry.main(['remote', 'show', '--help'], out=StringIO()) == 0
+    finally:
+        for path in files:
+            sys.modules.pop(path.stem, None)
