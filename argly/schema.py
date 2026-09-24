@@ -20,7 +20,28 @@ def _validate_spelling(name: str) -> None:
         raise ValueError(f'invalid option spelling {name!r}')
 
 
+def _validate_scalar(value: Any, spec: dict[str, Any], field: str) -> Any:
+    kind = spec['type']
+    dest = spec['dest']
+    expected = {'str': str, 'int': int, 'float': float, 'bool': bool, 'path': str}[kind]
+    if type(value) is not expected:
+        raise ValueError(f'{dest}: {field} {value!r} does not match {kind}')
+
+    if kind == 'float' and (value != value or value in (float('inf'), float('-inf'))):
+        raise ValueError(f'{dest}: {field} must be finite')
+
+    if kind == 'path' and isinstance(value, str):
+        from pathlib import Path
+
+        return Path(value).as_posix()
+
+    return value
+
 def _validate_value(spec: dict[str, Any]) -> None:
+    fields = ('dest', 'type', 'required', 'multiple', 'nullable', 'help', 'metavar', 'choices', 'default')
+    if not isinstance(spec, dict) or any(field not in spec for field in fields):
+        raise ValueError('value specification is missing required fields')
+
     dest = spec['dest']
     if not isinstance(dest, str) or not dest.isidentifier():
         raise ValueError(f'invalid parameter name {dest!r}')
@@ -39,13 +60,31 @@ def _validate_value(spec: dict[str, Any]) -> None:
     if choices is not None and (not isinstance(choices, (list, tuple)) or not choices):
         raise ValueError(f'{dest}: choices must be nonempty')
 
-    if choices is not None and spec['type'] == 'path':
-        from pathlib import Path
+    if choices is not None:
+        choices = [_validate_scalar(choice, spec, 'choice') for choice in choices]
+        spec['choices'] = choices
 
-        if any(type(choice) is not str for choice in choices):
-            raise ValueError(f'{dest}: path choices must be strings')
+    default = spec['default']
+    if spec['multiple']:
+        if spec['nullable']:
+            raise ValueError(f'{dest}: list values cannot be nullable')
 
-        spec['choices'] = [Path(choice).as_posix() for choice in choices]
+        if not isinstance(default, (list, tuple)):
+            raise ValueError(f'{dest}: a list value needs a list or tuple default')
+
+        default = [_validate_scalar(item, spec, 'default') for item in default]
+    elif default is None:
+        if not spec['required'] and not spec['nullable']:
+            raise ValueError(f'{dest}: default cannot be None unless nullable or required')
+    else:
+        default = _validate_scalar(default, spec, 'default')
+
+    if choices is not None and default is not None:
+        defaults = default if spec['multiple'] else [default]
+        if any(item not in choices for item in defaults):
+            raise ValueError(f'{dest}: default is outside the choices')
+
+    spec['default'] = default
 
 
 def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
@@ -123,6 +162,11 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
                 expected = 'bool' if action == 'flag' else 'int'
                 if option['type'] != expected or option['multiple'] or option['nullable']:
                     raise ValueError(f'{dest}: {action} requires {expected}')
+
+                if option['required'] or option['choices'] is not None:
+                    raise ValueError(f'{dest}: {action} cannot be required or have choices')
+            elif option['type'] == 'bool':
+                raise ValueError(f'{dest}: boolean options require the flag action')
 
             scope[dest] = option
 
