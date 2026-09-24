@@ -136,6 +136,20 @@ class App:
 
         return '\n'.join(lines) + '\n'
 
+    def export_docs(self, output_format: str = 'markdown', *, path: str | None = None) -> str:
+        """Export Markdown, man, or JSON documentation without importing handlers.
+
+        path=None includes every command; an explicit path selects one command.
+        JSON contains schema_version, name, and commands. Each command describes
+        its path, summary, usage, subcommands, help_flags, options, arguments, and rules.
+        Parameter fields include name, type, names, required, multiple, nullable,
+        default, choices, help, metavar, constraints, and (for options) action.
+        Handler references, callbacks, and injected resources are omitted.
+        """
+        from argly.documentation import render
+
+        return render(self.name, self._nodes, output_format, path=path)
+
     def format_help(self, path: str = '') -> str:
         """Use generated help when available, otherwise render one page on demand."""
         if path not in self._nodes:

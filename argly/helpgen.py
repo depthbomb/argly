@@ -20,18 +20,61 @@ def _rows(items: list[tuple[str, str]]) -> list[str]:
 
     return rows
 
-def render(name: str, node: Node) -> str:
-    """Render one help page from compiled metadata without importing handlers."""
+def usage(name: str, node: Node) -> str:
+    """Describe an invocation consistently across help and exported documentation."""
     invocation = name + (' ' + node.path if node.path else '')
-    usage = f'Usage: {invocation} [options]'
+    synopsis = f'Usage: {invocation} [options]'
     if node.children:
-        usage += ' <command>' if node.handler is None else ' [command]'
+        synopsis += ' <command>' if node.handler is None else ' [command]'
 
     for argument in node.arguments:
         label = argument['metavar'] + ('...' if argument['multiple'] else '')
-        usage += ' ' + (f'<{label}>' if argument['required'] else f'[{label}]')
+        synopsis += ' ' + (f'<{label}>' if argument['required'] else f'[{label}]')
 
-    lines = [usage]
+    return synopsis
+
+def value_constraints(spec: dict[str, object]) -> list[str]:
+    """Human-readable constraints without running validators or converters."""
+    rules = spec.get('constraints')
+    if not isinstance(rules, dict):
+        return []
+
+    details = []
+    if rules.get('minimum') is not None:
+        details.append(f'minimum: {rules["minimum"]}')
+
+    if rules.get('maximum') is not None:
+        details.append(f'maximum: {rules["maximum"]}')
+
+    path = rules.get('path')
+    if isinstance(path, dict):
+        if path.get('exists') is not None:
+            details.append('must exist' if path['exists'] else 'must not exist')
+
+        if path.get('kind') is not None:
+            details.append('must be a ' + path['kind'])
+
+        for access in ('readable', 'writable'):
+            if path.get(access):
+                details.append('must be ' + access)
+
+    return details
+
+def relationship(rule: dict[str, object]) -> str:
+    """Explain a rule over explicitly supplied parameters."""
+    parameters = rule['parameters']
+    assert isinstance(parameters, list)
+    if rule['kind'] == 'exclusive':
+        return 'Supply at most one of: ' + ', '.join(parameters)
+
+    if rule['kind'] == 'requires':
+        return f'{parameters[0]} requires: ' + ', '.join(parameters[1:])
+
+    return 'Supply at least one of: ' + ', '.join(parameters)
+
+def render(name: str, node: Node) -> str:
+    """Render one help page from compiled metadata without importing handlers."""
+    lines = [usage(name, node)]
     if node.summary:
         lines.extend(('', node.summary))
 
@@ -48,7 +91,7 @@ def render(name: str, node: Node) -> str:
 
     if node.arguments:
         lines.extend(('', 'Arguments:'))
-        lines.extend(_rows([(item['metavar'], item['help']) for item in node.arguments]))
+        lines.extend(_rows([(item['metavar'], ' '.join([item['help'], *value_constraints(item)]).strip()) for item in node.arguments]))
 
     lines.extend(('', 'Options:'))
     rows = [('-h, --help', 'Show this help and exit')]
@@ -76,12 +119,17 @@ def render(name: str, node: Node) -> str:
         if option['multiple'] or option['action'] == 'count':
             details.append('(repeatable)')
 
+        details.extend('[' + constraint + ']' for constraint in value_constraints(option))
+
         if option['dest'] in inherited_names:
             details.append('(also applies to subcommands)')
 
         rows.append((label, ' '.join(details)))
 
     lines.extend(_rows(rows))
+    if node.rules:
+        lines.extend(('', 'Constraints:'))
+        lines.extend('  ' + relationship(rule) for rule in node.rules)
 
     return '\n'.join(lines) + '\n'
 
@@ -113,6 +161,11 @@ def generate(app: App, output: Path, *, check: bool = False, help_only: bool = F
         raise ValueError('help output must be a .py file')
 
     data = source(app, help_only=help_only).encode('utf-8')
+
+    return write_output(output, data, check=check)
+
+def write_output(output: Path, data: bytes, *, check: bool = False) -> bool:
+    """Share atomic, permission-preserving writes between generated artifacts."""
     try:
         existing = output.read_bytes()
     except FileNotFoundError:
