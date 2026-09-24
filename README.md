@@ -238,7 +238,82 @@ Use `--format man` or `--format json` for the other formats, and `--command "rem
 
 Prepared generation moves discovery, schema validation, and parser-table setup out of application startup. It also emits conversion and validation functions for your declarations. Reuse a loaded `App` when parsing more than once.
 
-Larger command trees have more startup work to save. Small tools may spend most of their startup time launching Python. The [benchmark script](benchmarks/bench.py) compares equivalent warm parses with `argparse` and reports help lookup and prepared versus discovered app loading separately. Its startup timers begin inside fresh Python processes, so they don't include interpreter launch time.
+### Library comparison
+
+The [comparison benchmark](benchmarks/compare.py) runs the same workloads through argly, `argparse`, Click, Typer, Cleo, and Cyclopts. It checks the selected handler, typed values, defaults, rejected input, and help before measuring anything. The tables cover these fixtures; application work and optional features will affect actual CLI performance.
+
+Measured September 24, 2026, on Windows 11 x64 (build 26340), CPython 3.14.7, an Intel Core i7-9700K, and 16 GB RAM. argly uses the pure-Python library source at `0252352`, including unreleased changes after `0.1.0`. Other library versions are shown in the tables.
+
+Values are **median ± MAD**; MAD is the median absolute deviation, a measure of spread. Lower times are better. Each configuration has nine independent worker processes, with shuffled execution order and a different Python hash seed each round. The same seed and command selection apply to every library in that round.
+
+**Warm invocation**, in microseconds, includes argument parsing, conversion, and calling the handler. Every adapter reuses an application or command built before timing. Each worker calibrates batches toward 100 ms, discards a warmup batch, and measures three batches with garbage collection enabled. The table summarizes the nine worker medians.
+
+| Library / version | Flat (µs) | 10 commands (µs) | Nested 50 (µs) |
+| --- | ---: | ---: | ---: |
+| argly, no generation | 7.3 ± 0.0 | 8.3 ± 0.1 | 8.8 ± 0.1 |
+| argly, generated | 6.9 ± 0.1 | 8.2 ± 0.1 | 9.1 ± 0.1 |
+| argparse 3.14.7 | 29.9 ± 0.4 | 57.4 ± 0.2 | 80.7 ± 0.5 |
+| Click 8.5.0 | 110.1 ± 0.7 | 175.5 ± 0.3 | 230.6 ± 1.3 |
+| Typer 0.27.2 | 81.9 ± 0.3 | 123.9 ± 0.6 | 156.8 ± 0.7 |
+| Cleo 2.1.0 | N/A | 103.9 ± 0.4 | 116.4 ± 0.9 |
+| Cyclopts 5.0.0 | 1,888.7 ± 20.7 | 2,397.8 ± 18.9 | 2,466.7 ± 30.7 |
+
+**Fresh-process latency**, in milliseconds, includes launching Python, imports, application setup, one invocation, and process exit. Help requests the selected command's `--help`. Each cell summarizes nine launches, with bytecode and filesystem caches warmed beforehand. Output goes to the OS null device; color is disabled and terminal width is set to 80 columns. Each framework keeps its usual help renderer. The empty Python process baseline was **67.0 ± 0.5 ms**.
+
+| Library / version | Flat (ms) | 10 commands (ms) | Nested 50 (ms) | Nested 50 help (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| argly, no generation | 101.1 ± 1.0 | 103.0 ± 1.2 | 113.9 ± 1.1 | 130.5 ± 1.3 |
+| argly, generated | 83.6 ± 0.7 | 84.1 ± 1.7 | 84.1 ± 1.7 | 72.0 ± 1.2 |
+| argparse 3.14.7 | 111.4 ± 0.3 | 116.9 ± 1.6 | 129.0 ± 2.1 | 129.8 ± 1.2 |
+| Click 8.5.0 | 126.4 ± 0.7 | 127.3 ± 1.3 | 131.1 ± 2.0 | 144.2 ± 1.7 |
+| Typer 0.27.2 | 166.7 ± 1.8 | 169.3 ± 1.3 | 184.2 ± 1.7 | 357.0 ± 2.7 |
+| Cleo 2.1.0 | N/A | 166.0 ± 2.9 | 168.3 ± 2.3 | 175.9 ± 1.3 |
+| Cyclopts 5.0.0 | 191.3 ± 1.1 | 194.8 ± 1.0 | 202.2 ± 1.0 | 379.6 ± 2.9 |
+
+<details>
+<summary>500-command scaling stress test</summary>
+
+This wider tree is reported separately from the smaller applications. It uses the same timing rules and three parameter families.
+
+| Library / version | Warm (µs) | Process (ms) | Help process (ms) |
+| --- | ---: | ---: | ---: |
+| argly, no generation | 8.3 ± 0.1 | 222.7 ± 1.7 | 239.7 ± 2.0 |
+| argly, generated | 8.3 ± 0.0 | 89.7 ± 2.3 | 72.1 ± 1.3 |
+| argparse 3.14.7 | 57.4 ± 0.3 | 232.2 ± 1.7 | 236.4 ± 0.8 |
+| Click 8.5.0 | 177.6 ± 1.1 | 150.0 ± 0.7 | 161.3 ± 1.7 |
+| Typer 0.27.2 | 123.4 ± 0.9 | 343.8 ± 2.0 | 516.2 ± 1.6 |
+| Cleo 2.1.0 | 105.1 ± 0.1 | 178.6 ± 1.2 | 183.8 ± 1.5 |
+| Cyclopts 5.0.0 | 156,102.9 ± 361.4 | 450.1 ± 2.0 | 742.8 ± 2.3 |
+
+</details>
+
+The [shared fixtures](benchmarks/comparison_workloads.py) define a flat command, 10 sibling commands, 50 commands in five groups, and the 500-command stress case. Every command has a distinct importable handler. All libraries use those same handler modules and matching defaults and choices, with parameter descriptions where supported. The three parameter families cover strings, integers, floats, boolean flags, and string choices; defaults vary between commands.
+
+Warm batches cycle equally through the first, middle, and last commands, reporting time per invocation. Process runs rotate through those same commands, three launches per selection. The flat case has just one selection. Handlers only record their identity and values and return `0`. Cleo's flat cells are omitted to keep its standard named-command `Application` entry point.
+
+A few implementation details matter when reading the results:
+
+- **Argly without generation** builds an `App` from declarations during process startup. **Generated argly** loads a prepared plan for the same handlers and schemas. Both reuse a loaded `App` for warm calls. Prepared files are built before the measurements; one-off generation time and artifact sizes are saved separately in the JSON.
+- **Generated help** serves saved text without loading the parser. Its process latency measures that deployment feature alongside the other libraries' runtime help renderers, whose formatting and capabilities differ.
+- **Typer** uses `typer.main.get_command(app)` once to create its reusable command. That work is included in process startup and excluded from warm timing, just like application setup in the other adapters. Repeated calls to the ordinary `Typer` application object would rebuild that command. Completion options are disabled.
+- **Cyclopts** uses explicitly named child `App` objects. Registration style can affect its large-tree costs, so the [adapter](benchmarks/comparison_apps.py) makes this choice visible.
+- **Cleo** converts integers and floats and checks string choices in its handler adapter. That work is included in the invocation timings.
+
+The non-generated adapters register commands eagerly. Custom lazy registration, first-ever launches with cold filesystem caches, memory usage, async handlers, and application I/O are outside this comparison. Small differences should be read alongside the spread, and results on other platforms may differ.
+
+To rerun the comparison in your project virtual environment:
+
+```sh
+python -m pip install -e .
+python -m pip install -r benchmarks/requirements.txt
+python -X utf8 benchmarks/compare.py --processes 9 --batches 3 --target-ms 100 --output ../argly-comparison.json
+```
+
+The script prints Markdown tables and saves every timing sample, worker loop count, source hash, package version, command selection, and execution order to JSON. The [dependency pins](benchmarks/requirements.txt) match this run. Unexpected exceptions fail the correctness checks.
+
+For argly-specific work, the original [benchmark script](benchmarks/bench.py) compares warm parsing with `argparse`, help lookup, and prepared versus discovered app loading. Its startup timers begin inside fresh Python processes, so they exclude interpreter launch time and aren't directly comparable to the startup columns above.
+
+### Development checks
 
 With the development dependencies installed:
 
