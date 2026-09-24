@@ -139,6 +139,21 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
         if handler is not None and (not isinstance(handler, str) or ':' not in handler):
             raise ValueError(f'invalid handler reference for {path!r}')
 
+        if type(entry.get('async', False)) is not bool:
+            raise ValueError('async must be a bool')
+
+        resources = entry.get('resources', {})
+        if not isinstance(resources, dict) or any(
+            not isinstance(parameter, str) or not parameter.isidentifier()
+            or not isinstance(name, str) or not name.isidentifier()
+            or parameter in entry['bindings']
+            for parameter, name in resources.items()
+        ):
+            raise ValueError('resources must map unbound parameter names to resource names')
+
+        if handler is None and (resources or entry.get('async')):
+            raise ValueError('only command handlers can use resources or async execution')
+
         if not isinstance(entry['summary'], str):
             raise ValueError('command summary must be a string')
 

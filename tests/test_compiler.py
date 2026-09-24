@@ -1,7 +1,7 @@
 import pytest
 from copy import deepcopy
-from typing import Annotated, Optional
-from argly import App, Flag, Count, Option, Argument, Inherited, command, group
+from typing import Optional, Annotated
+from argly import App, Flag, Count, group, Option, command, Argument, Inherited
 
 
 def test_inherited_requires_matching_ancestor_type():
@@ -161,13 +161,14 @@ def test_only_integer_return_annotations_are_accepted():
         App('tool', [run])
 
 
-def test_async_handlers_are_rejected():
+def test_async_handlers_are_registered():
     @command('')
     async def run() -> int:
         return 0
 
-    with pytest.raises(ValueError, match='synchronous'):
-        App('tool', [run])
+    app = App('tool', [run])
+    assert app.registry['commands'][0]['async'] is True
+    assert app.run([]) == 0
 
 
 def test_registry_is_detached_and_versioned():

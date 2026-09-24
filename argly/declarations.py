@@ -50,6 +50,18 @@ class Inherited:
     def __init__(self, name: str | None = None) -> None:
         self.name = name
 
+class Resource:
+    """Inject a named App resource instead of reading a command-line argument.
+
+    The provider receives the Invocation and returns a sync or async context
+    manager. Multiple parameters sharing a name receive the same managed value.
+    """
+
+    __slots__ = ('name',)
+
+    def __init__(self, name: str | None = None) -> None:
+        self.name = name
+
 _F = TypeVar('_F', bound=Callable[..., Any])
 
 class Range:

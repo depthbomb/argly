@@ -46,12 +46,16 @@ class Node:
         'windows_options',
         'rules',
         'checked_defaults',
+        'is_async',
+        'resources',
     )
 
     def __init__(self, data: dict[str, Any], parent: Node | None, windows: bool) -> None:
         self.path: str = data['path']
         self.summary: str = data['summary']
         self.handler: str | None = data['handler']
+        self.is_async: bool = data.get('async', False)
+        self.resources: dict[str, str] = data.get('resources', {})
         self.bindings: dict[str, str] = data['bindings']
         self.arguments: list[dict[str, Any]] = [spec.copy() for spec in data['arguments']]
         self.children: dict[str, Node] = {}

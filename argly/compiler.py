@@ -11,7 +11,7 @@ from argly._references import resolve, validate_reference
 from argly.schema import empty_command, validate_registry
 from inspect import cleandoc, Parameter, signature, iscoroutinefunction
 from typing import Any, Union, Literal, get_args, Annotated, get_origin, get_type_hints
-from argly.declarations import Flag, Count, Range, Option, Argument, PathRule, Converter, Inherited
+from argly.declarations import Flag, Count, Range, Option, Argument, PathRule, Resource, Converter, Inherited
 
 def _shape(annotation: Any, converter: Converter | None = None) -> tuple[str, bool, bool, list[Any] | None, dict[str, Any]]:
     nullable = False
@@ -123,15 +123,14 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
     if not isinstance(declaration, tuple) or len(declaration) != 3:
         raise ValueError(f'{function.__name__} needs @command or @group')
 
-    if iscoroutinefunction(function):
-        raise ValueError('command handlers must be synchronous')
-
     path, summary, is_group = declaration
     hints = get_type_hints(function, include_extras=True)
     if not is_group and hints.get('return') is not int:
         raise ValueError(f'{path!r}: command handlers must declare -> int')
 
     entry = empty_command(path)
+    if iscoroutinefunction(function) and not is_group:
+        entry['async'] = True
     rules = getattr(function, '__argly_rules__', ())
     if rules:
         entry['rules'] = [{'kind': rule.kind, 'parameters': list(rule.parameters)} for rule in rules]
@@ -156,11 +155,21 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
             raise ValueError(f'{path!r}: {parameter.name} needs Annotated[T, CLI metadata]')
 
         underlying, *metadata = get_args(annotation)
-        markers = [item for item in metadata if isinstance(item, (Option, Argument, Inherited))]
+        markers = [item for item in metadata if isinstance(item, (Option, Argument, Inherited, Resource))]
         if len(markers) != 1:
             raise ValueError(f'{path!r}: {parameter.name} needs exactly one CLI marker')
 
         marker = markers[0]
+        if isinstance(marker, Resource):
+            if is_group or parameter.default is not Parameter.empty:
+                raise ValueError('Resource parameters belong to commands and cannot have defaults')
+
+            if any(isinstance(item, (Range, PathRule, Converter)) for item in metadata):
+                raise ValueError('Resource parameters cannot have CLI value constraints')
+
+            entry.setdefault('resources', {})[parameter.name] = marker.name or parameter.name
+            continue
+
         converters = [item for item in metadata if isinstance(item, Converter)]
         if len(converters) > 1:
             raise ValueError(f'{parameter.name}: only one Converter is allowed')
