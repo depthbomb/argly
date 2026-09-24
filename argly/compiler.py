@@ -5,12 +5,11 @@ from pkgutil import walk_packages
 from importlib import import_module
 from collections.abc import Callable, Iterable
 from argly.schema import empty_command, validate_registry
-from argly.declarations import Option, Flag, Count, Argument, Inherited
-from inspect import Parameter, signature, cleandoc, iscoroutinefunction
-from typing import Any, Union, Literal, Optional, Annotated, get_args, get_origin, get_type_hints
+from argly.declarations import Flag, Count, Option, Argument, Inherited
+from inspect import cleandoc, Parameter, signature, iscoroutinefunction
+from typing import Any, Union, Literal, get_args, Annotated, get_origin, get_type_hints
 
-
-def _shape(annotation: Any) -> tuple[str, bool, bool, Optional[list[Any]]]:
+def _shape(annotation: Any) -> tuple[str, bool, bool, list[Any] | None]:
     nullable = False
     origin = get_origin(annotation)
     if origin in (Union, UnionType):
@@ -46,7 +45,6 @@ def _shape(annotation: Any) -> tuple[str, bool, bool, Optional[list[Any]]]:
 
     return kind, multiple, nullable, choices
 
-
 def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
     if value is None and nullable:
         return None
@@ -68,7 +66,6 @@ def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
         raise ValueError('non-finite defaults cannot be generated')
 
     return value
-
 
 def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     declaration = getattr(function, '__argly__', None)
@@ -196,7 +193,6 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
 
     return entry, inherited
 
-
 def build_registry(
     name: str,
     commands: Iterable[Callable[..., Any]],
@@ -251,7 +247,6 @@ def build_registry(
     }
 
     return validate_registry(registry)
-
 
 def discover(package: str) -> list[Callable[..., Any]]:
     """Find decorated module-level functions in a package, in stable module order."""

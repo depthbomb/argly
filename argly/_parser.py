@@ -1,10 +1,8 @@
 from __future__ import annotations
-from typing import Any, Optional
-
+from typing import Any
 
 class UsageError(ValueError):
     """An invalid invocation, reported by App.run with exit status 2."""
-
 
 class ParseResult:
     __slots__ = ('node', 'values', 'help_requested')
@@ -13,7 +11,6 @@ class ParseResult:
         self.node = node
         self.values = values
         self.help_requested = help_requested
-
 
 class Node:
     __slots__ = (
@@ -31,10 +28,10 @@ class Node:
         'windows_options',
     )
 
-    def __init__(self, data: dict[str, Any], parent: Optional[Node], windows: bool) -> None:
+    def __init__(self, data: dict[str, Any], parent: Node | None, windows: bool) -> None:
         self.path: str = data['path']
         self.summary: str = data['summary']
-        self.handler: Optional[str] = data['handler']
+        self.handler: str | None = data['handler']
         self.bindings: dict[str, str] = data['bindings']
         self.arguments: list[dict[str, Any]] = [spec.copy() for spec in data['arguments']]
         self.children: dict[str, Node] = {}
@@ -61,7 +58,6 @@ class Node:
             dest for dest, default in self.defaults.items() if isinstance(default, list)
         )
 
-
 def _default_value(spec: dict[str, Any]) -> Any:
     default = spec['default']
     if default is not None and spec['type'] == 'path':
@@ -71,7 +67,6 @@ def _default_value(spec: dict[str, Any]) -> Any:
         return _convert(default, spec)
 
     return default
-
 
 def _convert(value: str, spec: dict[str, Any]) -> Any:
     kind = spec['type']
@@ -100,8 +95,7 @@ def _convert(value: str, spec: dict[str, Any]) -> Any:
 
     return result
 
-
-def _store(values: dict[str, Any], spec: dict[str, Any], value: Optional[str]) -> None:
+def _store(values: dict[str, Any], spec: dict[str, Any], value: str | None) -> None:
     dest = spec['dest']
     action = spec['action']
     if action == 'flag':
@@ -119,7 +113,6 @@ def _store(values: dict[str, Any], spec: dict[str, Any], value: Optional[str]) -
         else:
             values[dest] = converted
 
-
 def _looks_like_option(value: str, node: Node) -> bool:
     if value == '--' or value in ('--help', '-h'):
         return True
@@ -131,7 +124,6 @@ def _looks_like_option(value: str, node: Node) -> bool:
             return True
 
     return node.windows_options and value.partition('=')[0] in node.lookup
-
 
 def parse(root: Node, argv: list[str]) -> ParseResult:
     node = root

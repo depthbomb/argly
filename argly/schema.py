@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Any
 from copy import deepcopy
 
-
 def _validate_spelling(name: str) -> None:
     if not isinstance(name, str) or '=' in name or any(char.isspace() for char in name):
         raise ValueError(f'invalid option spelling {name!r}')
@@ -18,7 +17,6 @@ def _validate_spelling(name: str) -> None:
 
     if not valid:
         raise ValueError(f'invalid option spelling {name!r}')
-
 
 def _validate_scalar(value: Any, spec: dict[str, Any], field: str) -> Any:
     kind = spec['type']
@@ -85,7 +83,6 @@ def _validate_value(spec: dict[str, Any]) -> None:
             raise ValueError(f'{dest}: default is outside the choices')
 
     spec['default'] = default
-
 
 def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
     """Validate and detach a versioned registry before constructing parser tables."""
@@ -205,7 +202,6 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
     data['commands'] = list(seen.values())
 
     return data
-
 
 def empty_command(path: str) -> dict[str, Any]:
     return {

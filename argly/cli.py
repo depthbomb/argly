@@ -1,11 +1,9 @@
 from sys import argv
-from typing import Optional
 from argparse import ArgumentParser
 from collections.abc import Sequence
 from argly.helpgen import main as generate_main
 
-
-def main(args: Optional[Sequence[str]] = None) -> int:
+def main(args: Sequence[str] | None = None) -> int:
     arguments = list(argv[1:] if args is None else args)
     parser = ArgumentParser(prog='argly', description='Tools for building argly applications.')
     parser.add_argument(

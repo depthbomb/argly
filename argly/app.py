@@ -1,11 +1,10 @@
 from __future__ import annotations
 import sys
+from typing import Any, TextIO
 from importlib import import_module
-from typing import Any, TextIO, Optional
 from argly.schema import validate_registry
 from collections.abc import Callable, Iterable, Sequence
-from argly._parser import Node, UsageError, ParseResult, parse
-
+from argly._parser import Node, parse, UsageError, ParseResult
 
 class Invocation:
     """A parsed invocation. Parsing does not import the selected handler."""
@@ -26,7 +25,6 @@ class Invocation:
         )
         self._node = result.node
 
-
 class App:
     """A compiled command tree. Reuse it to avoid rebuilding parser tables."""
 
@@ -38,7 +36,7 @@ class App:
         commands: Iterable[Callable[..., Any]] = (),
         *,
         windows_options: bool = False,
-        help_lookup: Optional[Callable[[str], Optional[str]]] = None,
+        help_lookup: Callable[[str], str | None] | None = None,
     ) -> None:
         from argly.compiler import build_registry
 
@@ -57,10 +55,10 @@ class App:
 
     def run(
         self,
-        args: Optional[Sequence[str]] = None,
+        args: Sequence[str] | None = None,
         *,
-        out: Optional[TextIO] = None,
-        err: Optional[TextIO] = None,
+        out: TextIO | None = None,
+        err: TextIO | None = None,
     ) -> int:
         """Return a handler's exit status, 0 for help, or 2 for usage errors."""
         output = sys.stdout if out is None else out
@@ -117,7 +115,7 @@ class App:
         cls,
         registry: dict[str, Any],
         *,
-        help_lookup: Optional[Callable[[str], Optional[str]]] = None,
+        help_lookup: Callable[[str], str | None] | None = None,
     ) -> App:
         """Load generated metadata without discovering or importing command modules."""
         app = cls.__new__(cls)
@@ -135,7 +133,7 @@ class App:
     def _initialize(
         self,
         registry: dict[str, Any],
-        help_lookup: Optional[Callable[[str], Optional[str]]],
+        help_lookup: Callable[[str], str | None] | None,
     ) -> None:
         self.registry = validate_registry(registry)
         self.name: str = self.registry['name']

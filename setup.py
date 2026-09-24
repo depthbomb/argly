@@ -1,5 +1,5 @@
 from os import environ
-from setuptools import Extension, setup
+from setuptools import setup, Extension
 
 extensions = []
 if environ.get('ARGLY_CYTHON') == '1':

@@ -2,14 +2,12 @@ from __future__ import annotations
 from pathlib import Path
 from argly.app import App
 from pprint import pformat
-from typing import Optional
 from os import chmod, replace
 from argly._parser import Node
 from argparse import ArgumentParser
 from sys import path as module_path
 from collections.abc import Sequence
 from tempfile import NamedTemporaryFile
-
 
 def _rows(items: list[tuple[str, str]]) -> list[str]:
     width = min(max((len(label) for label, _ in items), default=0), 36)
@@ -21,7 +19,6 @@ def _rows(items: list[tuple[str, str]]) -> list[str]:
             rows.append(f'  {label:<{width}}  {description}'.rstrip())
 
     return rows
-
 
 def render(name: str, node: Node) -> str:
     """Render one help page from compiled metadata without importing handlers."""
@@ -88,7 +85,6 @@ def render(name: str, node: Node) -> str:
 
     return '\n'.join(lines) + '\n'
 
-
 def source(app: App, *, help_only: bool = False) -> str:
     """Generate an import-free module with static help and optional registry data."""
     if not help_only:
@@ -111,7 +107,6 @@ def source(app: App, *, help_only: bool = False) -> str:
 
     return '\n'.join(lines)
 
-
 def generate(app: App, output: Path, *, check: bool = False, help_only: bool = False) -> bool:
     """Write atomically, or check freshness. Return False for stale check output."""
     if output.suffix != '.py':
@@ -130,7 +125,7 @@ def generate(app: App, output: Path, *, check: bool = False, help_only: bool = F
         return False
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary: Optional[Path] = None
+    temporary: Path | None = None
     try:
         with NamedTemporaryFile(
             dir=output.parent, prefix='.argly-', suffix='.tmp', delete=False
@@ -149,8 +144,7 @@ def generate(app: App, output: Path, *, check: bool = False, help_only: bool = F
 
     return True
 
-
-def main(args: Optional[Sequence[str]] = None, *, prog: Optional[str] = None) -> int:
+def main(args: Sequence[str] | None = None, *, prog: str | None = None) -> int:
     """Discover command definitions and generate a standalone Python module."""
     parser = ArgumentParser(
         prog=prog, description='Generate static argly help and a lazy command registry.'
@@ -184,7 +178,6 @@ def main(args: Optional[Sequence[str]] = None, *, prog: Optional[str] = None) ->
         parser.exit(1, f'argly gen: {options.output} is missing or stale; regenerate it\n')
 
     return 0
-
 
 if __name__ == '__main__':
     raise SystemExit(main())
