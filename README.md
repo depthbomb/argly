@@ -139,11 +139,11 @@ Ranges are inclusive. `PathRule` supports `exists`, `kind='file'` or `'directory
 
 Command and group rules refer to parameter names, including inherited options:
 
-| Rule | What it checks |
-| --- | --- |
-| `MutuallyExclusive('quiet', 'verbose')` | At most one is supplied. |
-| `AtLeastOne('file', 'url')` | At least one is supplied. |
-| `Requires('token', 'user')` | Supplying `token` also requires `user`. |
+| Rule                                    | What it checks                          |
+|-----------------------------------------|-----------------------------------------|
+| `MutuallyExclusive('quiet', 'verbose')` | At most one is supplied.                |
+| `AtLeastOne('file', 'url')`             | At least one is supplied.               |
+| `Requires('token', 'user')`             | Supplying `token` also requires `user`. |
 
 These rules look at what the user explicitly supplied. Defaults don't count as supplied values.
 
@@ -248,42 +248,42 @@ Values are **median ± MAD**; MAD is the median absolute deviation, a measure of
 
 **Warm invocation**, in microseconds, includes argument parsing, conversion, and calling the handler. Every adapter reuses an application or command built before timing. Each worker calibrates batches toward 100 ms, discards a warmup batch, and measures three batches with garbage collection enabled. The table summarizes the nine worker medians.
 
-| Library / version | Flat (µs) | 10 commands (µs) | Nested 50 (µs) |
-| --- | ---: | ---: | ---: |
-| argly, no generation | 7.3 ± 0.0 | 8.3 ± 0.1 | 8.8 ± 0.1 |
-| argly, generated | 6.9 ± 0.1 | 8.2 ± 0.1 | 9.1 ± 0.1 |
-| argparse 3.14.7 | 29.9 ± 0.4 | 57.4 ± 0.2 | 80.7 ± 0.5 |
-| Click 8.5.0 | 110.1 ± 0.7 | 175.5 ± 0.3 | 230.6 ± 1.3 |
-| Typer 0.27.2 | 81.9 ± 0.3 | 123.9 ± 0.6 | 156.8 ± 0.7 |
-| Cleo 2.1.0 | N/A | 103.9 ± 0.4 | 116.4 ± 0.9 |
-| Cyclopts 5.0.0 | 1,888.7 ± 20.7 | 2,397.8 ± 18.9 | 2,466.7 ± 30.7 |
+| Library / version    |      Flat (µs) | 10 commands (µs) | Nested 50 (µs) |
+|----------------------|---------------:|-----------------:|---------------:|
+| argly, no generation |      7.3 ± 0.0 |        8.3 ± 0.1 |      8.8 ± 0.1 |
+| argly, generated     |      6.9 ± 0.1 |        8.2 ± 0.1 |      9.1 ± 0.1 |
+| argparse 3.14.7      |     29.9 ± 0.4 |       57.4 ± 0.2 |     80.7 ± 0.5 |
+| Click 8.5.0          |    110.1 ± 0.7 |      175.5 ± 0.3 |    230.6 ± 1.3 |
+| Typer 0.27.2         |     81.9 ± 0.3 |      123.9 ± 0.6 |    156.8 ± 0.7 |
+| Cleo 2.1.0           |            N/A |      103.9 ± 0.4 |    116.4 ± 0.9 |
+| Cyclopts 5.0.0       | 1,888.7 ± 20.7 |   2,397.8 ± 18.9 | 2,466.7 ± 30.7 |
 
 **Fresh-process latency**, in milliseconds, includes launching Python, imports, application setup, one invocation, and process exit. Help requests the selected command's `--help`. Each cell summarizes nine launches, with bytecode and filesystem caches warmed beforehand. Output goes to the OS null device; color is disabled and terminal width is set to 80 columns. Each framework keeps its usual help renderer. The empty Python process baseline was **67.0 ± 0.5 ms**.
 
-| Library / version | Flat (ms) | 10 commands (ms) | Nested 50 (ms) | Nested 50 help (ms) |
-| --- | ---: | ---: | ---: | ---: |
-| argly, no generation | 101.1 ± 1.0 | 103.0 ± 1.2 | 113.9 ± 1.1 | 130.5 ± 1.3 |
-| argly, generated | 83.6 ± 0.7 | 84.1 ± 1.7 | 84.1 ± 1.7 | 72.0 ± 1.2 |
-| argparse 3.14.7 | 111.4 ± 0.3 | 116.9 ± 1.6 | 129.0 ± 2.1 | 129.8 ± 1.2 |
-| Click 8.5.0 | 126.4 ± 0.7 | 127.3 ± 1.3 | 131.1 ± 2.0 | 144.2 ± 1.7 |
-| Typer 0.27.2 | 166.7 ± 1.8 | 169.3 ± 1.3 | 184.2 ± 1.7 | 357.0 ± 2.7 |
-| Cleo 2.1.0 | N/A | 166.0 ± 2.9 | 168.3 ± 2.3 | 175.9 ± 1.3 |
-| Cyclopts 5.0.0 | 191.3 ± 1.1 | 194.8 ± 1.0 | 202.2 ± 1.0 | 379.6 ± 2.9 |
+| Library / version    |   Flat (ms) | 10 commands (ms) | Nested 50 (ms) | Nested 50 help (ms) |
+|----------------------|------------:|-----------------:|---------------:|--------------------:|
+| argly, no generation | 101.1 ± 1.0 |      103.0 ± 1.2 |    113.9 ± 1.1 |         130.5 ± 1.3 |
+| argly, generated     |  83.6 ± 0.7 |       84.1 ± 1.7 |     84.1 ± 1.7 |          72.0 ± 1.2 |
+| argparse 3.14.7      | 111.4 ± 0.3 |      116.9 ± 1.6 |    129.0 ± 2.1 |         129.8 ± 1.2 |
+| Click 8.5.0          | 126.4 ± 0.7 |      127.3 ± 1.3 |    131.1 ± 2.0 |         144.2 ± 1.7 |
+| Typer 0.27.2         | 166.7 ± 1.8 |      169.3 ± 1.3 |    184.2 ± 1.7 |         357.0 ± 2.7 |
+| Cleo 2.1.0           |         N/A |      166.0 ± 2.9 |    168.3 ± 2.3 |         175.9 ± 1.3 |
+| Cyclopts 5.0.0       | 191.3 ± 1.1 |      194.8 ± 1.0 |    202.2 ± 1.0 |         379.6 ± 2.9 |
 
 <details>
 <summary>500-command scaling stress test</summary>
 
 This wider tree is reported separately from the smaller applications. It uses the same timing rules and three parameter families.
 
-| Library / version | Warm (µs) | Process (ms) | Help process (ms) |
-| --- | ---: | ---: | ---: |
-| argly, no generation | 8.3 ± 0.1 | 222.7 ± 1.7 | 239.7 ± 2.0 |
-| argly, generated | 8.3 ± 0.0 | 89.7 ± 2.3 | 72.1 ± 1.3 |
-| argparse 3.14.7 | 57.4 ± 0.3 | 232.2 ± 1.7 | 236.4 ± 0.8 |
-| Click 8.5.0 | 177.6 ± 1.1 | 150.0 ± 0.7 | 161.3 ± 1.7 |
-| Typer 0.27.2 | 123.4 ± 0.9 | 343.8 ± 2.0 | 516.2 ± 1.6 |
-| Cleo 2.1.0 | 105.1 ± 0.1 | 178.6 ± 1.2 | 183.8 ± 1.5 |
-| Cyclopts 5.0.0 | 156,102.9 ± 361.4 | 450.1 ± 2.0 | 742.8 ± 2.3 |
+| Library / version    |         Warm (µs) | Process (ms) | Help process (ms) |
+|----------------------|------------------:|-------------:|------------------:|
+| argly, no generation |         8.3 ± 0.1 |  222.7 ± 1.7 |       239.7 ± 2.0 |
+| argly, generated     |         8.3 ± 0.0 |   89.7 ± 2.3 |        72.1 ± 1.3 |
+| argparse 3.14.7      |        57.4 ± 0.3 |  232.2 ± 1.7 |       236.4 ± 0.8 |
+| Click 8.5.0          |       177.6 ± 1.1 |  150.0 ± 0.7 |       161.3 ± 1.7 |
+| Typer 0.27.2         |       123.4 ± 0.9 |  343.8 ± 2.0 |       516.2 ± 1.6 |
+| Cleo 2.1.0           |       105.1 ± 0.1 |  178.6 ± 1.2 |       183.8 ± 1.5 |
+| Cyclopts 5.0.0       | 156,102.9 ± 361.4 |  450.1 ± 2.0 |       742.8 ± 2.3 |
 
 </details>
 
