@@ -84,6 +84,29 @@ def _wide():
     return app, parser, tokens
 
 
+def _overridden_defaults(loops, rounds):
+    results = {}
+    for size in (0, 1000, 10000):
+        @command('')
+        def repeated(*, item: Annotated[list[str], Option()] = ('default',) * size) -> int:
+            return len(item)
+
+        app = App('tool', [repeated])
+        tokens = ['--item=explicit']
+        assert app.parse(tokens).kwargs == {'item': ['explicit']}
+        for _ in range(1000):
+            app.parse(tokens)
+
+        samples = repeat(
+            lambda app=app, tokens=tokens: app.parse(tokens), number=loops, repeat=rounds
+        )
+        results[str(size)] = {
+            'parse_us': median(samples) * 1e6 / loops,
+            'samples_s': samples,
+        }
+
+    return results
+
 def _startup(script, rounds):
     measured = 'from time import perf_counter_ns; start=perf_counter_ns(); ' + script
     measured += '; print((perf_counter_ns()-start)/1e6)'
@@ -196,6 +219,7 @@ def main():
     }
     results['parser_module'] = sys.modules['argly._parser'].__file__
     results['paired_backends'] = _compare_backends(args.loops, args.rounds)
+    results['overridden_defaults'] = _overridden_defaults(args.loops, args.rounds)
     output = json.dumps(results, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

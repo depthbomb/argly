@@ -334,3 +334,22 @@ def test_factory_commands_dispatch_distinct_closures():
     assert app.run(['first']) == 11
     assert app.run(['second']) == 22
     assert app.run(['first']) == 11
+
+def test_inherited_list_overrides_and_defaults_remain_isolated():
+    @group('')
+    def root(*, tag: Annotated[list[str], Option('-t')] = ('default',)) -> None:
+        pass
+
+    @command('child')
+    def child(*, tag: Annotated[list[str], Inherited()]) -> int:
+        return len(tag)
+
+    app = App('tool', [root, child])
+    parsed = app.parse(['-tbefore', 'child', '-tafter'])
+    assert parsed.kwargs['tag'] == ['before', 'after']
+    parsed.kwargs['tag'].append('mutation')
+    assert app.parse(['child', '-tnext']).kwargs['tag'] == ['next']
+    fallback = app.parse(['child'])
+    assert fallback.kwargs['tag'] == ['default']
+    fallback.kwargs['tag'].clear()
+    assert app.parse(['child']).kwargs['tag'] == ['default']

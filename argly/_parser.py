@@ -244,7 +244,8 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
 
     result = node.defaults.copy()
     for dest in node.mutable_defaults:
-        result[dest] = result[dest].copy()
+        if dest not in values:
+            result[dest] = result[dest].copy()
 
     result.update(values)
     offset = 0
