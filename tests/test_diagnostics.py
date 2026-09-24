@@ -77,9 +77,8 @@ def test_error_help_and_suggestions_do_not_import_handlers():
     script = '''
 import sys
 from io import StringIO
-from argly import App
-from examples.remote_cli.generated import REGISTRY, get_help
-app = App.from_registry(REGISTRY, help_lookup=get_help)
+from examples.remote_cli.generated import load
+app = load()
 assert 'difflib' not in sys.modules
 assert app.parse(['remote', 'list']).path == 'remote list'
 assert 'difflib' not in sys.modules

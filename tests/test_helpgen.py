@@ -5,6 +5,7 @@ from pathlib import Path
 from subprocess import run
 from argly import App, command
 from argly.helpgen import source, generate
+from argly.codegen import generate as generate_prepared
 
 PROJECT = Path(__file__).resolve().parents[1]
 
@@ -50,12 +51,18 @@ def test_help_only_has_no_registry(example):
 def test_generated_help_does_not_import_command_modules_or_renderer():
     script = """
 import sys
-from argly import App
-from examples.remote_cli.generated import REGISTRY, get_help
-app = App.from_registry(REGISTRY, help_lookup=get_help)
-assert app.run(['remote', 'add', '--help']) == 0
+from runpy import run_module
+sys.argv = ['tool', 'remote', 'add', '--help']
+try:
+    run_module('examples.remote_cli', run_name='__main__')
+except SystemExit as error:
+    assert error.code == 0
+else:
+    raise AssertionError('example did not exit')
+assert 'argly' not in sys.modules
 assert 'argly.compiler' not in sys.modules
 assert 'argly.helpgen' not in sys.modules
+assert not any(name.endswith(('_runtime', '_metadata')) for name in sys.modules)
 assert not any(name.startswith('examples.remote_cli.commands') for name in sys.modules)
 """
     result = run([sys.executable, '-c', script], cwd=PROJECT, capture_output=True, text=True)
@@ -66,9 +73,8 @@ assert not any(name.startswith('examples.remote_cli.commands') for name in sys.m
 def test_related_commands_share_a_lazy_module_and_cache_handlers_separately():
     script = """
 import sys
-from argly import App
-from examples.remote_cli.generated import REGISTRY, get_help
-app = App.from_registry(REGISTRY, help_lookup=get_help)
+from examples.remote_cli.generated import load
+app = load()
 assert app.parse(['remote', 'add', 'origin', '-uabc']).kwargs['url'] == 'abc'
 assert not any(name.startswith('examples.remote_cli.commands') for name in sys.modules)
 assert app.run(['remote', 'add', 'origin', '-uabc']) == 0
@@ -129,7 +135,7 @@ def test_strings_are_escaped_as_python_literals():
 
 
 def test_committed_example_is_fresh(example):
-    assert generate(example, PROJECT / 'examples/remote_cli/generated.py', check=True)
+    assert generate_prepared(example, PROJECT / 'examples/remote_cli/generated.py', check=True)
 
 
 def test_console_entry_point_discovers_packages_from_working_directory(tmp_path):

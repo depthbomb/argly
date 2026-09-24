@@ -75,9 +75,8 @@ def test_format_escaping():
 def test_documentation_never_imports_handlers_or_resources():
     script = '''
 import sys
-from argly import App
-from examples.remote_cli.generated import REGISTRY
-app = App.from_registry(REGISTRY)
+from examples.remote_cli.generated import load
+app = load()
 for format in ('markdown', 'man', 'json'):
     assert app.export_docs(format)
 assert not any(name.startswith('examples.remote_cli.commands') for name in sys.modules)
@@ -86,23 +85,32 @@ assert 'argly.compiler' not in sys.modules
     result = run([sys.executable, '-c', script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
+@pytest.fixture
+def legacy_registry(tmp_path):
+    from argly.helpgen import generate
+
+    app = App.discover('tool', 'examples.remote_cli.commands', windows_options=True)
+    generate(app, tmp_path / 'example_registry.py')
+    return tmp_path
+
 @pytest.mark.parametrize('format', ['markdown', 'man', 'json'])
-def test_cli_exports_and_checks_files(tmp_path, format):
+def test_cli_exports_and_checks_files(legacy_registry, format):
+    tmp_path = legacy_registry
     output = tmp_path / 'output'
-    args = [sys.executable, '-m', 'argly', 'docs', '--registry', 'examples.remote_cli.generated', '--format', format, '--output', str(output)]
+    args = [sys.executable, '-m', 'argly', 'docs', '--registry', 'example_registry', '--format', format, '--output', str(output)]
     for extra, expected in [(['--check'], 1), ([], 0), (['--check'], 0)]:
-        result = run([*args, *extra], capture_output=True, text=True)
+        result = run([*args, *extra], cwd=tmp_path, capture_output=True, text=True)
         assert result.returncode == expected, result.stderr
     assert output.read_text(encoding='utf-8')
     output.write_text('stale')
-    assert run([*args, '--check'], capture_output=True).returncode == 1
+    assert run([*args, '--check'], cwd=tmp_path, capture_output=True).returncode == 1
 
-def test_cli_stdout_selected_command_and_invalid_options():
-    args = [sys.executable, '-m', 'argly', 'docs', '--registry', 'examples.remote_cli.generated:REGISTRY', '--format', 'json', '--command', 'remote add']
-    result = run(args, capture_output=True, text=True)
+def test_cli_stdout_selected_command_and_invalid_options(legacy_registry):
+    args = [sys.executable, '-m', 'argly', 'docs', '--registry', 'example_registry:REGISTRY', '--format', 'json', '--command', 'remote add']
+    result = run(args, cwd=legacy_registry, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert [command['path'] for command in json.loads(result.stdout)['commands']] == ['remote add']
-    assert run([*args, '--check'], capture_output=True).returncode == 2
+    assert run([*args, '--check'], cwd=legacy_registry, capture_output=True).returncode == 2
     app = App('tool', [read])
     with pytest.raises(ValueError, match='unknown command'):
         app.export_docs(path='missing')

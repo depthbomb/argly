@@ -1,4 +1,8 @@
-from argly import App
-from examples.remote_cli.generated import REGISTRY, get_help
+"""Run the prepared remote CLI.
 
-raise SystemExit(App.from_registry(REGISTRY, help_lookup=get_help).run())
+Regenerate its artifacts from the project root with:
+    python -m argly gen --prepared --package examples.remote_cli.commands --name tool --windows-options --output examples/remote_cli/generated.py
+"""
+from examples.remote_cli.generated import main
+
+raise SystemExit(main())

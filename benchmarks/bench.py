@@ -208,8 +208,7 @@ def main():
         'import_argly': _startup('import argly', args.rounds),
         'import_argparse': _startup('import argparse', args.rounds),
         'generated_app': _startup(
-            'from argly import App; from examples.remote_cli.generated import REGISTRY, get_help; '
-            'app=App.from_registry(REGISTRY, help_lookup=get_help)',
+            'from examples.remote_cli.generated import load; app=load()',
             args.rounds,
         ),
         'discovered_app': _startup(
