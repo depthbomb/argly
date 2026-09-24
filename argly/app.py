@@ -92,9 +92,20 @@ class App:
 
             return code
         except UsageError as error:
-            errors.write(f'{self.name}: error: {error}\n')
+            errors.write(self.format_error(error))
 
             return 2
+
+    def format_error(self, error: UsageError) -> str:
+        """Render a usage failure. Override this method to customize presentation."""
+        path = error.command if error.command in self._nodes else ''
+        help_lines = self.format_help(path).splitlines()
+        usage = help_lines[0] if help_lines else f'Usage: {self.name}' + (' ' + path if path else '')
+        lines = [usage, f'{self.name}: error: {error}']
+        if error.suggestions:
+            lines.append('Did you mean: ' + ', '.join(error.suggestions) + '?')
+
+        return '\n'.join(lines) + '\n'
 
     def format_help(self, path: str = '') -> str:
         """Use generated help when available, otherwise render one page on demand."""

@@ -63,8 +63,9 @@ def _shape(annotation: Any, converter: Converter | None = None) -> tuple[str, bo
     else:
         kind = supported.get(annotation)
     if kind is None:
+        display = f'{annotation.__module__}.{annotation.__qualname__}' if isinstance(annotation, type) else repr(annotation)
         raise ValueError(
-            'unsupported CLI annotation ' + repr(annotation) + '; use a supported scalar, Enum, Literal, list, or Converter'
+            f'unsupported CLI annotation {display}; use a supported scalar, Enum, Literal, list, or Converter'
         )
 
     if nullable and multiple:
