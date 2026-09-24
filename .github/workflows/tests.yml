@@ -23,10 +23,10 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
       - name: Create virtual environment
@@ -57,6 +57,8 @@ jobs:
           PY
       - run: python -m ruff check .
       - run: python -m mypy
+      - name: Check prepared example artifacts
+        run: python -m argly gen --prepared --package examples.remote_cli.commands --name tool --windows-options --output examples/remote_cli/generated.py --check
       - run: python -m build
       - run: python -m twine check --strict dist/*
       - name: Install the built wheel
@@ -82,7 +84,7 @@ jobs:
       - run: python -m pip check
       - name: Save validated distributions
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: python-distributions
           path: dist/*

@@ -22,7 +22,7 @@ The example just prints the parsed values. Its [remote commands](examples/remote
 
 ## Commands are functions
 
-Here's what a command module could look like. Put this in `mycli/commands/remote.py`, with an `__init__.py` in each package directory:
+Here's what a command module could look like. Put this in `mycli/commands/remote.py`. The `mycli` and `commands` directories can be namespace packages without `__init__.py`. If you add nested command directories beneath `mycli.commands`, each needs an `__init__.py` for recursive discovery to find its modules.
 
 ```python
 from typing import Annotated
@@ -242,7 +242,7 @@ Prepared generation moves discovery, schema validation, and parser-table setup o
 
 The [comparison benchmark](benchmarks/compare.py) runs the same workloads through argly, `argparse`, Click, Typer, Cleo, and Cyclopts. It checks the selected handler, typed values, defaults, rejected input, and help before measuring anything. The tables cover these fixtures; application work and optional features will affect actual CLI performance.
 
-Measured September 24, 2026, on Windows 11 x64 (build 26340), CPython 3.14.7, an Intel Core i7-9700K, and 16 GB RAM. argly uses the pure-Python library source at `0252352`, including unreleased changes after `0.1.0`. Other library versions are shown in the tables.
+Measured September 24, 2026, on Windows 11 x64 (build 26340), CPython 3.14.7, an Intel Core i7-9700K, and 16 GB RAM. argly uses the pure-Python library source at `0252352`, a development revision leading up to `0.2.0`. Other library versions are shown in the tables.
 
 Values are **median ± MAD**; MAD is the median absolute deviation, a measure of spread. Lower times are better. Each configuration has nine independent worker processes, with shuffled execution order and a different Python hash seed each round. The same seed and command selection apply to every library in that round.
 
@@ -321,6 +321,7 @@ With the development dependencies installed:
 python -m pytest --import-mode=importlib --cov=argly --cov-branch
 python -m ruff check .
 python -m mypy
+python -m argly gen --prepared --package examples.remote_cli.commands --name tool --windows-options --output examples/remote_cli/generated.py --check
 python -m build --outdir dist/release
 python -m twine check --strict dist/release/*
 python benchmarks/bench.py
