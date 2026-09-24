@@ -30,13 +30,106 @@ def _literal(value: Any) -> str:
 
     return repr(value)
 
+def _bounds_source(spec: Mapping[str, Any], result: str, original: str) -> list[str]:
+    lines: list[str] = []
+    for field, comparison, label in (('minimum', '>=', 'at least'), ('maximum', '<=', 'at most')):
+        bound = spec.get('constraints', {}).get(field)
+        if bound is not None:
+            message = f'{spec["dest"]}: must be {label} {bound}'
+            lines.extend((
+                f'    if not {result} {comparison} {bound!r}:',
+                f'        raise UsageError({message!r}, code=\'constraint\', parameter={spec["dest"]!r}, value={original})',
+            ))
+
+    return lines
+
+def _conversion_source(spec: Mapping[str, Any], symbol: str) -> list[str]:
+    kind = spec['type']
+    dest = spec['dest']
+    choices = spec['choices']
+    lines = [f'def {symbol}(value, _spec):']
+    if kind == 'str' and choices is None:
+        return [*lines, '    return value', '']
+
+    choice_tokens = tuple(map(str, choices)) if choices is not None else ()
+    choice_message = f'{dest}: choose from ' + ', '.join(choice_tokens)
+    suggestion_value = 'result.as_posix()' if kind == 'path' else 'value'
+    choice_error = f'raise UsageError({choice_message!r}, code=\'invalid_choice\', parameter={dest!r}, value=value, suggestions=_suggest({suggestion_value}, {choice_tokens!r}))'
+    if kind == 'enum':
+        lines.extend((f'    if value not in {tuple(choices)!r}:', '        ' + choice_error))
+
+    lines.append('    try:')
+    if kind in ('str', 'int', 'float'):
+        expression = 'value' if kind == 'str' else f'{kind}(value)'
+        lines.append(f'        result = {expression}')
+    elif kind == 'path':
+        lines.extend(('        from pathlib import Path', '', '        result = Path(value)'))
+    elif kind == 'uuid':
+        lines.extend(('        from uuid import UUID', '', '        result = UUID(value)'))
+    elif kind in ('date', 'datetime'):
+        lines.extend((f'        from datetime import {kind}', '', f'        result = {kind}.fromisoformat(value)'))
+    else:
+        lines.extend(('        from argly._references import resolve', ''))
+        if kind == 'enum':
+            lines.append(f'        result = resolve({spec["enum"]!r})[{dict(spec["enum_members"])!r}[value]]')
+        else:
+            lines.append(f'        result = resolve({spec["converter"]!r})(value)')
+
+    lines.extend((
+        '    except (ValueError, OverflowError, TypeError) as error:',
+        f'        raise UsageError({(dest + ": invalid " + kind + " value ")!r} + repr(value), code=\'invalid_value\', parameter={dest!r}, value=value) from error', '',
+    ))
+    if choices is not None and kind != 'enum':
+        choice = 'result' if kind in ('str', 'int', 'float') else 'result.as_posix()' if kind == 'path' else 'value'
+        lines.extend((f'    if {choice} not in {tuple(choices)!r}:', '        ' + choice_error, ''))
+
+    lines.extend(_bounds_source(spec, 'result', 'value'))
+    if spec.get('constraints', {}).get('path') is not None:
+        lines.extend((
+            '    from argly._value_types import validate_constraints', '',
+            '    try:', '        validate_constraints(result, _spec)',
+            '    except ValueError as error:',
+            f'        raise UsageError({(dest + ": ")!r} + str(error), code=\'constraint\', parameter={dest!r}, value=value) from error',
+        ))
+
+    lines.extend(('    return result', ''))
+
+    return lines
+
+def _rules_source(rules: Any, symbol: str) -> list[str]:
+    parameters = dict.fromkeys(parameter for rule in rules for parameter in rule['parameters'])
+    bits = {parameter: 1 << index for index, parameter in enumerate(parameters)}
+    lines = [f'def {symbol}(supplied, _bits={_literal(bits)}):', '    mask = 0', '    for parameter in supplied:', '        mask |= _bits.get(parameter, 0)', '']
+    for rule in rules:
+        names = rule['parameters']
+        mask = sum(bits[name] for name in names)
+        parameter = None
+        if rule['kind'] == 'exclusive':
+            condition = f'(mask & {mask}).bit_count() > 1'
+            message = 'mutually exclusive parameters: ' + ', '.join(names)
+            code = 'conflicting_parameters'
+        elif rule['kind'] == 'at_least_one':
+            condition = f'not mask & {mask}'
+            message = 'supply at least one of: ' + ', '.join(names)
+            code = 'missing_selection'
+        else:
+            condition = f'mask & {bits[names[0]]} and mask & {mask} != {mask}'
+            message = names[0] + ' requires: ' + ', '.join(names[1:])
+            code = 'missing_dependency'
+            parameter = names[0]
+
+        lines.extend((f'    if {condition}:', f'        raise UsageError({message!r}, code={code!r}, parameter={parameter!r})', ''))
+
+    return lines
+
 def _runtime_source(app: App) -> str:
     # The app passed here has freshly validated metadata and compiled nodes.
     # noinspection PyProtectedMember
     nodes = app._nodes
     specs: dict[str, _Code] = {}
     lines = [
-        'from types import MappingProxyType as M', '',
+        'from types import MappingProxyType as M',
+        'from argly._parser import _suggest, UsageError', '',
         f'FORMAT_VERSION = {FORMAT_VERSION}', f'NAME = {app.name!r}',
         f'WINDOWS_OPTIONS = {app.registry["windows_options"]!r}', '',
     ]
@@ -45,27 +138,56 @@ def _runtime_source(app: App) -> str:
         compact = {key: value for key, value in spec.items() if key not in ('help', 'metavar', 'names')}
         default = compact['default']
         if compact['type'] == 'path' and default is not None:
-            compact['default'] = [str(item) for item in default] if compact['multiple'] else str(default)
+            compact['default'] = [Path(item).as_posix() for item in default] if compact['multiple'] else Path(default).as_posix()
 
         text = _literal(compact)
         if text not in specs:
-            symbol = _Code(f'_s{len(specs)}')
+            index = len(specs)
+            symbol = _Code(f'_s{index}')
             specs[text] = symbol
-            lines.append(f'{symbol} = {text}')
+            if compact.get('action', 'value') == 'value':
+                converter = _Code(f'_convert{index}')
+                lines.extend(_conversion_source(compact, converter))
+                compact['_convert'] = converter
+
+            if compact['type'] in ('int', 'float') and compact.get('constraints'):
+                validator = _Code(f'_validate{index}')
+                lines.extend((f'def {validator}(value):', '    if value is None:', '        return value', ''))
+                lines.extend(_bounds_source(compact, 'value', 'str(value)'))
+                lines.extend(('    return value', ''))
+                compact['_validate'] = validator
+
+            lines.extend((f'{symbol} = {_literal(compact)}', ''))
 
         return specs[text]
 
     commands = {}
+    bindings: dict[str, _Code] = {}
+    rules: dict[str, _Code] = {}
     for path, node in nodes.items():
         options = tuple(parameter(spec) for spec in node.options)
         arguments = tuple(parameter(spec) for spec in node.arguments)
         lookup = {name: parameter(spec) for name, spec in node.lookup.items()}
         defaults = {spec['dest']: spec['default'] for spec in node.options}
         checked = tuple(parameter(spec) for spec in node.options if spec['type'] in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom') or spec.get('constraints'))
+        binding_key = repr(tuple(node.bindings.items()))
+        if binding_key not in bindings:
+            binder = _Code(f'_bind{len(bindings)}')
+            bindings[binding_key] = binder
+            expression = ', '.join(f'{name!r}: values[{source!r}]' for name, source in node.bindings.items())
+            lines.extend((f'def {binder}(values):', '    return {' + expression + '}', ''))
+
+        rule_key = _literal(node.rules)
+        if node.rules and rule_key not in rules:
+            validator = _Code(f'_rules{len(rules)}')
+            rules[rule_key] = validator
+            lines.extend(_rules_source(node.rules, validator))
+
         commands[path] = (
             node.handler, node.is_async, node.bindings, options, arguments,
             lookup, defaults, node.required, node.mutable_defaults, checked,
             node.rules, node.resources, {name: child.path for name, child in node.children.items()},
+            bindings[binding_key], rules.get(rule_key),
         )
 
     lines.extend(('', 'COMMANDS = ' + _literal(commands), ''))
@@ -110,7 +232,7 @@ if __name__ == '__main__':
 '''
 
 def validate_references(registry: dict[str, Any]) -> None:
-    """Resolve generated references at build time without calling user code."""
+    """Resolve references at build time without invoking handlers or converters."""
     checked: set[tuple[str, str]] = set()
     for entry in registry['commands']:
         references = [('handler', entry['handler'])] if entry['handler'] else []

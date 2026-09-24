@@ -16,14 +16,15 @@ class Invocation:
         self.path = result.node.path
         self.values = result.values
         self.help_requested = result.help_requested
-        self.kwargs = (
-            {}
-            if result.help_requested
-            else {
+        if result.help_requested:
+            self.kwargs = {}
+        elif result.node.bind is not None:
+            self.kwargs = result.node.bind(result.values)
+        else:
+            self.kwargs = {
                 parameter: result.values[source]
                 for parameter, source in result.node.bindings.items()
             }
-        )
         self._node = result.node
 
 class App:

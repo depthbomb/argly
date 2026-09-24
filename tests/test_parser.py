@@ -3,7 +3,7 @@ from io import StringIO
 from pathlib import Path
 from itertools import permutations
 from typing import Literal, Optional, Annotated
-from argly import App, Flag, Count, Option, Argument, Inherited, UsageError, command, group
+from argly import App, Flag, Count, group, Option, command, Argument, Inherited, UsageError
 
 
 @group('')
@@ -35,9 +35,14 @@ def show(*, verbose: Annotated[int, Inherited()]) -> int:
     return verbose
 
 
-@pytest.fixture
-def app():
-    return App('tool', [root, remote, add, show], windows_options=True)
+@pytest.fixture(params=['discovered', 'generated'])
+def app(request, tmp_path):
+    app = App('tool', [root, remote, add, show], windows_options=True)
+    if request.param == 'generated':
+        from test_codegen import prepared
+
+        app, _ = prepared(app, tmp_path)
+    return app
 
 
 @pytest.mark.parametrize(

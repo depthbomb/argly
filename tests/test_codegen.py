@@ -4,6 +4,7 @@ import random
 from enum import Enum
 from io import StringIO
 from pathlib import Path
+from datetime import date
 from subprocess import run
 from types import ModuleType
 from typing import Annotated
@@ -11,19 +12,49 @@ from importlib import import_module
 from contextlib import contextmanager
 from argly.codegen import generate, artifacts
 from argly.helpgen import source, generate as generate_registry
-from argly import App, Flag, Count, Range, group, Option, command, Argument, PathRule, Requires, Resource, Converter, Inherited, UsageError, MutuallyExclusive
+from argly import App, Flag, Count, Range, group, Option, command, Argument, PathRule, Requires, Resource, Converter, Inherited, AtLeastOne, UsageError, MutuallyExclusive
 
 class Color(Enum):
     RED = 'red'
     BLUE = 'blue'
 
 CUSTOM_DEFAULT = {'value': 'default'}
+CONVERSIONS = []
 
 def decode(value):
     return {'value': value}
 
 def encode(value):
     return value['value']
+
+def counted_decode(value):
+    CONVERSIONS.append(value)
+    if value == 'bad':
+        raise ValueError('bad custom value')
+    return {'value': value}
+
+@command('numeric', rules=[AtLeastOne('amount', 'count')])
+def numeric_handler(
+    *,
+    amount: Annotated[float, Option(), Range(-2, 5)] = 1.5,
+    count: Annotated[int, Count('-c'), Range(0, 2)] = 0,
+    pick: Annotated[int, Option(choices=(1, 3, 5))] = 3,
+    nullable: Annotated[int | None, Option(), Range(1, 3)] = None,
+) -> int:
+    return count
+
+@command('custom')
+def counted_handler(*, item: Annotated[dict, Option(), Converter(__name__ + ':counted_decode', serializer=__name__ + ':encode')] = CUSTOM_DEFAULT) -> int:
+    return 0
+
+@command('choices')
+def choices_handler(
+    path: Annotated[Path, Argument()] = Path('relative/child'),
+    *,
+    other: Annotated[Path, Option(choices=(Path('relative/child'),))] = Path('relative/child'),
+    day: Annotated[date, Option(choices=(date(2026, 9, 24),))] = date(2026, 9, 24),
+) -> int:
+    return 0
 
 @group('')
 def root(*, verbose: Annotated[int, Count('-v', '/V')] = 0) -> None:
@@ -291,3 +322,75 @@ def test_help_with_a_space_inside_one_token_does_not_select_a_command(tmp_path, 
     finally:
         for path in files:
             sys.modules.pop(path.stem, None)
+
+@pytest.mark.parametrize('tokens', [
+    ['numeric'], ['numeric', '--amount=nan'], ['numeric', '--amount=inf'],
+    ['numeric', '--amount=-inf'], ['numeric', '--amount=-2'],
+    ['numeric', '--amount=5', '--nullable=2'], ['numeric', '--amount=nope'],
+    ['numeric', '-ccc'], ['numeric', '-cc', '--pick=2'],
+    ['numeric', '-c', '--pick=5'], ['numeric', '--nullable=0', '-c'],
+    ['choices'], ['choices', '--other=wrong'], ['choices', '--day=2026-09-25'],
+    ['choices', '--day=invalid'],
+])
+def test_specialized_converters_and_rules_preserve_errors(tmp_path, tokens):
+    direct = App('tool', [numeric_handler, choices_handler])
+    generated, _ = prepared(direct, tmp_path)
+    assert outcome(generated, tokens) == outcome(direct, tokens)
+
+def test_specialized_extended_types_match_generic_types(tmp_path):
+    from test_validation import extended
+
+    direct = App('tool', [extended])
+    generated, _ = prepared(direct, tmp_path)
+    for tokens in ([], ['--color=blu'], ['--identifier=no'], ['--day=2026-02-30'], ['--moment=no'], ['--colors=blue', '--colors=red'], ['--identifier=12345678-1234-1234-1234-123456789abc', '--moment=2026-09-24T12:30:00+00:00']):
+        assert outcome(generated, ['types', *tokens]) == outcome(direct, ['types', *tokens])
+
+def test_specialized_custom_conversion_runs_once_and_stays_lazy(tmp_path):
+    direct = App('tool', [counted_handler])
+    CONVERSIONS.clear()
+    generated, _ = prepared(direct, tmp_path)
+    generated.format_help('custom')
+    assert CONVERSIONS == []
+    assert generated.parse(['custom']).kwargs['item'] == CUSTOM_DEFAULT
+    assert CONVERSIONS == ['default']
+    CONVERSIONS.clear()
+    with pytest.raises(UsageError) as error:
+        generated.parse(['custom', '--item=bad'])
+    assert error.value.code == 'invalid_value'
+    assert CONVERSIONS == ['bad']
+
+def test_generated_paths_remain_portable(tmp_path):
+    files = artifacts(App('tool', [choices_handler]), tmp_path / 'generated.py')
+    runtime = next(text for path, text in files.items() if path.stem.endswith('_runtime'))
+    assert 'relative/child' in runtime
+    assert 'relative\\\\child' not in runtime
+
+def test_enum_member_drift_is_rejected_before_writing(tmp_path):
+    app = App('tool', [root, handler])
+    color = next(spec for spec in app.registry['commands'][1]['options'] if spec['dest'] == 'color')
+    color['enum_members']['blue'] = 'RED'
+    with pytest.raises(ValueError, match='members have changed'):
+        generate(app, tmp_path / 'generated.py')
+    assert not list(tmp_path.iterdir())
+
+@pytest.mark.parametrize('field', ['_convert', '_validate'])
+def test_runtime_callbacks_are_rejected_in_unprepared_registries(field):
+    app = App('tool', [root, handler])
+    app.registry['commands'][1]['options'][0][field] = None
+    with pytest.raises(ValueError, match='generated callbacks'):
+        App.from_registry(app.registry)
+
+def test_literal_choices_are_escaped_without_rewriting_diagnostic_text(tmp_path):
+    direct = App('tool', [root, handler, choices_handler])
+    for entry in direct.registry['commands']:
+        for spec in entry['options']:
+            if spec['dest'] == 'label':
+                spec['choices'] = ["quote' and \\ slash\n\0", 'normal']
+                spec['default'] = 'normal'
+            elif spec['dest'] == 'other':
+                spec['choices'] = ['suggestions=_suggest(value,']
+                spec['default'] = spec['choices'][0]
+    direct = App.from_registry(direct.registry)
+    generated, _ = prepared(direct, tmp_path)
+    for args in (['run', "--label=quote' and \\ slash\n\0"], ['run', '--label=bad'], ['choices', '--other=bad']):
+        assert outcome(generated, args) == outcome(direct, args)

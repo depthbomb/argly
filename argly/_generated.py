@@ -4,7 +4,7 @@ from types import ModuleType
 from argly._parser import Node
 from collections.abc import Mapping, Iterator
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 class _Children(Mapping[str, Node]):
     def __init__(self, paths: Mapping[str, str], nodes: _Nodes) -> None:
@@ -39,7 +39,7 @@ class _Nodes(Mapping[str, Node]):
             node.handler, node.is_async, node.bindings, node.options,
             node.arguments, node.lookup, node.defaults, node.required,
             node.mutable_defaults, node.checked_defaults, node.rules,
-            node.resources, children,
+            node.resources, children, node.bind, node.validate,
         ) = data
         node.windows_options = self._windows
         node.children = _Children(children, self)

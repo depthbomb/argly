@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any
-from collections.abc import Mapping, Iterable, Sequence
+from collections.abc import Mapping, Callable, Iterable, Sequence
 
 class UsageError(ValueError):
     """A usage failure with stable fields, reported by App.run with exit status 2.
@@ -48,6 +48,8 @@ class Node:
         'checked_defaults',
         'is_async',
         'resources',
+        'bind',
+        'validate',
     )
 
     def __init__(self, data: dict[str, Any], parent: Node | None, windows: bool) -> None:
@@ -55,6 +57,8 @@ class Node:
         self.summary: str = data['summary']
         self.handler: str | None = data['handler']
         self.is_async: bool = data.get('async', False)
+        self.bind: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+        self.validate: Callable[[set[str]], None] | None = None
         self.resources: tuple[tuple[str, str], ...] = tuple(data.get('resources', {}).items())
         self.bindings: Mapping[str, str] = data['bindings']
         self.arguments: Sequence[Mapping[str, Any]] = [spec.copy() for spec in data['arguments']]
@@ -108,9 +112,13 @@ def _default_value(spec: Mapping[str, Any], *, check: bool = False) -> Any:
 
 def _checked_default(value: Any, spec: Mapping[str, Any]) -> Any:
     if spec['type'] in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom'):
-        return _convert(str(value), spec)
+        return spec.get('_convert', _convert)(str(value), spec)
 
     if spec.get('constraints'):
+        validator = spec.get('_validate')
+        if validator is not None:
+            return validator(value)
+
         from argly._value_types import validate_constraints
 
         try:
@@ -170,7 +178,7 @@ def _store(values: dict[str, Any], spec: Mapping[str, Any], value: str | None) -
         values[dest] = values.get(dest, spec['default']) + 1
     else:
         assert value is not None
-        converted = _convert(value, spec)
+        converted = spec.get('_convert', _convert)(value, spec)
         if spec['multiple']:
             if dest in values:
                 values[dest].append(converted)
@@ -330,12 +338,13 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
                 if spec['required'] and not rest:
                     raise UsageError(f'missing required argument {dest}', code='missing_argument', parameter=dest)
 
-                result[dest] = [_convert(value, spec) for value in rest] if rest else _default_value(spec, check=True)[:]
+                converter = spec.get('_convert', _convert)
+                result[dest] = [converter(value, spec) for value in rest] if rest else _default_value(spec, check=True)[:]
                 if rest:
                     supplied.add(dest)
                 offset = len(positionals)
             elif offset < len(positionals):
-                result[dest] = _convert(positionals[offset], spec)
+                result[dest] = spec.get('_convert', _convert)(positionals[offset], spec)
                 supplied.add(dest)
                 offset += 1
             elif spec['required']:
@@ -346,7 +355,10 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
         if offset < len(positionals):
             raise UsageError(f'unexpected argument {positionals[offset]!r}', code='unexpected_argument', value=positionals[offset])
 
-        for rule in node.rules:
+        if node.validate is not None:
+            node.validate(supplied)
+
+        for rule in (() if node.validate is not None else node.rules):
             parameters = rule['parameters']
             present = supplied.intersection(parameters)
             if rule['kind'] == 'exclusive' and len(present) > 1:

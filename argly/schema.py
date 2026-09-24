@@ -45,6 +45,9 @@ def _validate_scalar(value: Any, spec: dict[str, Any], field: str) -> Any:
     return value
 
 def _validate_value(spec: dict[str, Any]) -> None:
+    if '_convert' in spec or '_validate' in spec:
+        raise ValueError('generated callbacks cannot appear in declaration metadata')
+
     fields = ('dest', 'type', 'required', 'multiple', 'nullable', 'help', 'metavar', 'choices', 'default')
     if not isinstance(spec, dict) or any(field not in spec for field in fields):
         raise ValueError('value specification is missing required fields')
