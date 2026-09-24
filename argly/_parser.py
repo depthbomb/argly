@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any
-from collections.abc import Iterable
+from collections.abc import Mapping, Iterable, Sequence
 
 class UsageError(ValueError):
     """A usage failure with stable fields, reported by App.run with exit status 2.
@@ -55,28 +55,30 @@ class Node:
         self.summary: str = data['summary']
         self.handler: str | None = data['handler']
         self.is_async: bool = data.get('async', False)
-        self.resources: dict[str, str] = data.get('resources', {})
-        self.bindings: dict[str, str] = data['bindings']
-        self.arguments: list[dict[str, Any]] = [spec.copy() for spec in data['arguments']]
-        self.children: dict[str, Node] = {}
+        self.resources: tuple[tuple[str, str], ...] = tuple(data.get('resources', {}).items())
+        self.bindings: Mapping[str, str] = data['bindings']
+        self.arguments: Sequence[Mapping[str, Any]] = [spec.copy() for spec in data['arguments']]
+        self.children: Mapping[str, Node] = {}
         self.windows_options = windows
-        self.rules: list[dict[str, Any]] = ([] if parent is None else parent.rules) + data.get('rules', [])
-        self.options: list[dict[str, Any]] = ([] if parent is None else parent.options) + data[
+        self.rules: Sequence[Mapping[str, Any]] = ([] if parent is None else list(parent.rules)) + data.get('rules', [])
+        self.options: Sequence[Mapping[str, Any]] = ([] if parent is None else list(parent.options)) + data[
             'options'
         ]
-        self.lookup: dict[str, dict[str, Any]] = {}
+        lookup: dict[str, Mapping[str, Any]] = {}
+        self.lookup: Mapping[str, Mapping[str, Any]] = lookup
         self.defaults: dict[str, Any] = {}
         self.required: list[str] = []
         for option in self.options:
             for spelling in option['names']:
                 if windows or not spelling.startswith('/'):
-                    self.lookup[spelling] = option
+                    lookup[spelling] = option
 
             self.defaults[option['dest']] = _default_value(option)
             if option['required']:
                 self.required.append(option['dest'])
 
         for argument in self.arguments:
+            assert isinstance(argument, dict)
             argument['default'] = _default_value(argument)
 
         self.mutable_defaults = tuple(
@@ -84,7 +86,11 @@ class Node:
         )
         self.checked_defaults = tuple(spec for spec in self.options if spec['type'] in ('uuid', 'date', 'datetime', 'enum', 'custom') or spec.get('constraints'))
 
-def _default_value(spec: dict[str, Any], *, check: bool = False) -> Any:
+    def add_child(self, name: str, node: Node) -> None:
+        assert isinstance(self.children, dict)
+        self.children[name] = node
+
+def _default_value(spec: Mapping[str, Any], *, check: bool = False) -> Any:
     default = spec['default']
     if check and default is not None:
         if spec['multiple']:
@@ -100,7 +106,7 @@ def _default_value(spec: dict[str, Any], *, check: bool = False) -> Any:
 
     return default
 
-def _checked_default(value: Any, spec: dict[str, Any]) -> Any:
+def _checked_default(value: Any, spec: Mapping[str, Any]) -> Any:
     if spec['type'] in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom'):
         return _convert(str(value), spec)
 
@@ -114,7 +120,7 @@ def _checked_default(value: Any, spec: dict[str, Any]) -> Any:
 
     return value
 
-def _convert(value: str, spec: dict[str, Any], *, check: bool = True) -> Any:
+def _convert(value: str, spec: Mapping[str, Any], *, check: bool = True) -> Any:
     original = value
     kind = spec['type']
     if kind == 'enum' and value not in spec['choices']:
@@ -155,7 +161,7 @@ def _convert(value: str, spec: dict[str, Any], *, check: bool = True) -> Any:
 
     return result
 
-def _store(values: dict[str, Any], spec: dict[str, Any], value: str | None) -> None:
+def _store(values: dict[str, Any], spec: Mapping[str, Any], value: str | None) -> None:
     dest = spec['dest']
     action = spec['action']
     if action == 'flag':
@@ -306,7 +312,7 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
         result = node.defaults.copy()
         for dest in node.mutable_defaults:
             if dest not in values:
-                result[dest] = result[dest].copy()
+                result[dest] = list(result[dest])
 
         result.update(values)
         supplied = set(values)

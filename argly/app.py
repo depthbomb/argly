@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sys
+from types import ModuleType
 from typing import Any, TextIO
 from argly.schema import validate_registry
 from argly._references import resolve, validate_reference
@@ -28,7 +29,11 @@ class Invocation:
 class App:
     """A compiled command tree. Reuse it to avoid rebuilding parser tables."""
 
-    __slots__ = ('name', 'registry', '_nodes', '_root', '_help_lookup', '_handlers', '_resources')
+    __slots__ = ('name', '_registry', '_registry_loader', '_nodes', '_root', '_help_lookup', '_handlers', '_resources')
+    _registry: dict[str, Any] | None
+    _registry_loader: Callable[[], dict[str, Any]] | None
+    _nodes: Mapping[str, Node]
+    _root: Node
 
     def __init__(
         self,
@@ -49,6 +54,15 @@ class App:
             handler = self._nodes[path].handler
             if handler is not None:
                 self._handlers[path] = function
+
+    @property
+    def registry(self) -> dict[str, Any]:
+        """Return declaration metadata, loading it on demand for prepared apps."""
+        if self._registry is None:
+            assert self._registry_loader is not None
+            self._registry = self._registry_loader()
+
+        return self._registry
 
     def parse(self, args: Sequence[str]) -> Invocation:
         """Parse explicit arguments without calling handlers or writing output."""
@@ -148,6 +162,9 @@ class App:
         """
         from argly.documentation import render
 
+        if self._registry_loader is not None:
+            return App.from_registry(self.registry).export_docs(output_format, path=path)
+
         return render(self.name, self._nodes, output_format, path=path)
 
     def format_help(self, path: str = '') -> str:
@@ -175,6 +192,33 @@ class App:
         """Load generated metadata without discovering or importing command modules."""
         app = cls.__new__(cls)
         app._initialize(registry, help_lookup, resources)
+
+        return app
+
+    @classmethod
+    def from_generated(
+        cls,
+        plan: ModuleType,
+        *,
+        help_lookup: Callable[[str], str | None],
+        registry_loader: Callable[[], dict[str, Any]],
+        resources: Mapping[str, str | Callable[[Invocation], Any]] | None = None,
+    ) -> App:
+        """Load a versioned prepared artifact without revalidating declarations.
+
+        Use the generated module's load() helper. Arbitrary dictionaries should
+        go through from_registry(), which validates and copies their contents.
+        """
+        from argly._generated import load_nodes
+
+        nodes = load_nodes(plan)
+        app = cls.__new__(cls)
+        app.name = plan.NAME
+        app._registry = None
+        app._registry_loader = registry_loader
+        app._configure(help_lookup, resources)
+        app._nodes = nodes
+        app._root = nodes['']
 
         return app
 
@@ -230,7 +274,7 @@ class App:
         shared: dict[str, Any] = {}
         code = 0
         async with AsyncExitStack() as stack:
-            for parameter, name in node.resources.items():
+            for parameter, name in node.resources:
                 if name not in shared:
                     provider = self._resources.get(name)
                     if provider is None:
@@ -262,8 +306,27 @@ class App:
         help_lookup: Callable[[str], str | None] | None,
         resources: Mapping[str, str | Callable[[Invocation], Any]] | None,
     ) -> None:
-        self.registry = validate_registry(registry)
+        self._registry = validate_registry(registry)
+        self._registry_loader = None
         self.name: str = self.registry['name']
+        self._configure(help_lookup, resources)
+        nodes: dict[str, Node] = {}
+        for entry in self.registry['commands']:
+            path = entry['path']
+            parent = nodes.get(path.rpartition(' ')[0]) if path else None
+            node = Node(entry, parent, self.registry['windows_options'])
+            nodes[path] = node
+            if parent is not None:
+                parent.add_child(path.rpartition(' ')[2], node)
+
+        self._nodes = nodes
+        self._root = nodes['']
+
+    def _configure(
+        self,
+        help_lookup: Callable[[str], str | None] | None,
+        resources: Mapping[str, str | Callable[[Invocation], Any]] | None,
+    ) -> None:
         self._help_lookup = help_lookup
         self._resources = dict(resources or {})
         for name, provider in self._resources.items():
@@ -275,13 +338,3 @@ class App:
             elif not callable(provider):
                 raise ValueError(f'resource provider {name!r} must be callable or an import reference')
         self._handlers: dict[str, Callable[..., Any]] = {}
-        self._nodes: dict[str, Node] = {}
-        for entry in self.registry['commands']:
-            path = entry['path']
-            parent = self._nodes.get(path.rpartition(' ')[0]) if path else None
-            node = Node(entry, parent, self.registry['windows_options'])
-            self._nodes[path] = node
-            if parent is not None:
-                parent.children[path.rpartition(' ')[2]] = node
-
-        self._root = self._nodes['']

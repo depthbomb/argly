@@ -1,10 +1,10 @@
 from __future__ import annotations
 from typing import Any
 from argly._parser import Node
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from argly.helpgen import usage, relationship, write_output, value_constraints
 
-def _parameter(spec: dict[str, Any], windows: bool) -> dict[str, Any]:
+def _parameter(spec: Mapping[str, Any], windows: bool) -> dict[str, Any]:
     from copy import deepcopy
 
     fields = ('type', 'required', 'multiple', 'nullable', 'default', 'choices', 'help', 'metavar')
@@ -23,7 +23,7 @@ def _parameter(spec: dict[str, Any], windows: bool) -> dict[str, Any]:
 
     return result
 
-def _describe(name: str, nodes: dict[str, Node], path: str | None) -> dict[str, Any]:
+def _describe(name: str, nodes: Mapping[str, Node], path: str | None) -> dict[str, Any]:
     from copy import deepcopy
 
     if path is not None and path not in nodes:
@@ -143,7 +143,7 @@ def _man_document(document: dict[str, Any]) -> str:
 
     return '\n'.join(lines) + '\n'
 
-def render(name: str, nodes: dict[str, Node], output_format: str = 'markdown', *, path: str | None = None) -> str:
+def render(name: str, nodes: Mapping[str, Node], output_format: str = 'markdown', *, path: str | None = None) -> str:
     """Render metadata as Markdown, a section-1 man page, or versioned JSON.
 
     JSON schema version 1 is described by App.export_docs. Defaults and choices

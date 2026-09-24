@@ -1,7 +1,8 @@
 from typing import Any
+from collections.abc import Mapping
 from argly._references import resolve, validate_reference
 
-def parse_extended(value: str, spec: dict[str, Any]) -> Any:
+def parse_extended(value: str, spec: Mapping[str, Any]) -> Any:
     kind = spec['type']
     if kind == 'uuid':
         from uuid import UUID
@@ -25,7 +26,7 @@ def parse_extended(value: str, spec: dict[str, Any]) -> Any:
 
     raise ValueError(f'unsupported value type: {kind}')
 
-def validate_constraints(value: Any, spec: dict[str, Any]) -> None:
+def validate_constraints(value: Any, spec: Mapping[str, Any]) -> None:
     if value is None:
         return
 
