@@ -26,6 +26,8 @@ class Node:
         'required',
         'mutable_defaults',
         'windows_options',
+        'rules',
+        'checked_defaults',
     )
 
     def __init__(self, data: dict[str, Any], parent: Node | None, windows: bool) -> None:
@@ -36,6 +38,7 @@ class Node:
         self.arguments: list[dict[str, Any]] = [spec.copy() for spec in data['arguments']]
         self.children: dict[str, Node] = {}
         self.windows_options = windows
+        self.rules: list[dict[str, Any]] = ([] if parent is None else parent.rules) + data.get('rules', [])
         self.options: list[dict[str, Any]] = ([] if parent is None else parent.options) + data[
             'options'
         ]
@@ -57,18 +60,39 @@ class Node:
         self.mutable_defaults = tuple(
             dest for dest, default in self.defaults.items() if isinstance(default, list)
         )
+        self.checked_defaults = tuple(spec for spec in self.options if spec['type'] in ('uuid', 'date', 'datetime', 'enum', 'custom') or spec.get('constraints'))
 
-def _default_value(spec: dict[str, Any]) -> Any:
+def _default_value(spec: dict[str, Any], *, check: bool = False) -> Any:
     default = spec['default']
+    if check and default is not None:
+        if spec['multiple']:
+            return [_checked_default(item, spec) for item in default]
+
+        return _checked_default(default, spec)
+
     if default is not None and spec['type'] == 'path':
         if spec['multiple']:
-            return [_convert(item, spec) for item in default]
+            return [_convert(item, spec, check=False) for item in default]
 
-        return _convert(default, spec)
+        return _convert(default, spec, check=False)
 
     return default
 
-def _convert(value: str, spec: dict[str, Any]) -> Any:
+def _checked_default(value: Any, spec: dict[str, Any]) -> Any:
+    if spec['type'] in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom'):
+        return _convert(str(value), spec)
+
+    if spec.get('constraints'):
+        from argly._value_types import validate_constraints
+
+        try:
+            validate_constraints(value, spec)
+        except ValueError as error:
+            raise UsageError(f'{spec["dest"]}: {error}') from error
+
+    return value
+
+def _convert(value: str, spec: dict[str, Any], *, check: bool = True) -> Any:
     kind = spec['type']
     try:
         if kind == 'str':
@@ -84,14 +108,24 @@ def _convert(value: str, spec: dict[str, Any]) -> Any:
             result = path
             value = path.as_posix()
         else:
-            raise ValueError(f'unsupported value type: {kind}')
-    except (ValueError, OverflowError) as error:
+            from argly._value_types import parse_extended
+
+            result = parse_extended(value, spec)
+    except (ValueError, OverflowError, TypeError) as error:
         raise UsageError(f'{spec["dest"]}: invalid {kind} value {value!r}') from error
 
     choices = spec['choices']
-    choice_value = value if kind == 'path' else result
+    choice_value = value if kind in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom') else result
     if choices is not None and choice_value not in choices:
         raise UsageError(f'{spec["dest"]}: choose from {", ".join(map(str, choices))}')
+
+    if check and spec.get('constraints'):
+        from argly._value_types import validate_constraints
+
+        try:
+            validate_constraints(result, spec)
+        except ValueError as error:
+            raise UsageError(f'{spec["dest"]}: {error}') from error
 
     return result
 
@@ -242,6 +276,13 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
             result[dest] = result[dest].copy()
 
     result.update(values)
+    supplied = set(values)
+    for spec in node.checked_defaults:
+        if spec['dest'] not in values:
+            result[spec['dest']] = _default_value(spec, check=True)
+        elif spec['action'] == 'count':
+            _checked_default(result[spec['dest']], spec)
+
     offset = 0
     for spec in node.arguments:
         dest = spec['dest']
@@ -250,17 +291,32 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
             if spec['required'] and not rest:
                 raise UsageError(f'missing required argument {dest}')
 
-            result[dest] = [_convert(value, spec) for value in rest] if rest else spec['default'][:]
+            result[dest] = [_convert(value, spec) for value in rest] if rest else _default_value(spec, check=True)[:]
+            if rest:
+                supplied.add(dest)
             offset = len(positionals)
         elif offset < len(positionals):
             result[dest] = _convert(positionals[offset], spec)
+            supplied.add(dest)
             offset += 1
         elif spec['required']:
             raise UsageError(f'missing required argument {dest}')
         else:
-            result[dest] = spec['default']
+            result[dest] = _default_value(spec, check=True)
 
     if offset < len(positionals):
         raise UsageError(f'unexpected argument {positionals[offset]!r}')
+
+    for rule in node.rules:
+        parameters = rule['parameters']
+        present = supplied.intersection(parameters)
+        if rule['kind'] == 'exclusive' and len(present) > 1:
+            raise UsageError('mutually exclusive parameters: ' + ', '.join(parameters))
+
+        if rule['kind'] == 'at_least_one' and not present:
+            raise UsageError('supply at least one of: ' + ', '.join(parameters))
+
+        if rule['kind'] == 'requires' and parameters[0] in present and len(present) != len(parameters):
+            raise UsageError(parameters[0] + ' requires: ' + ', '.join(parameters[1:]))
 
     return ParseResult(node, result, False)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any
 from copy import deepcopy
+from argly._value_types import validate_metadata, validate_constraints
 
 def _validate_spelling(name: str) -> None:
     if not isinstance(name, str) or '=' in name or any(char.isspace() for char in name):
@@ -21,12 +22,20 @@ def _validate_spelling(name: str) -> None:
 def _validate_scalar(value: Any, spec: dict[str, Any], field: str) -> Any:
     kind = spec['type']
     dest = spec['dest']
-    expected = {'str': str, 'int': int, 'float': float, 'bool': bool, 'path': str}[kind]
+    expected = {'str': str, 'int': int, 'float': float, 'bool': bool, 'path': str, 'uuid': str, 'date': str, 'datetime': str, 'enum': str, 'custom': str}[kind]
     if type(value) is not expected:
         raise ValueError(f'{dest}: {field} {value!r} does not match {kind}')
 
     if kind == 'float' and (value != value or value in (float('inf'), float('-inf'))):
         raise ValueError(f'{dest}: {field} must be finite')
+
+    if kind in ('uuid', 'date', 'datetime') and isinstance(value, str):
+        from argly._value_types import parse_extended
+
+        parse_extended(value, spec)
+
+    if kind in ('int', 'float'):
+        validate_constraints(value, spec)
 
     if kind == 'path' and isinstance(value, str):
         from pathlib import Path
@@ -44,7 +53,7 @@ def _validate_value(spec: dict[str, Any]) -> None:
     if not isinstance(dest, str) or not dest.isidentifier():
         raise ValueError(f'invalid parameter name {dest!r}')
 
-    if spec['type'] not in ('str', 'int', 'float', 'bool', 'path'):
+    if spec['type'] not in ('str', 'int', 'float', 'bool', 'path', 'uuid', 'date', 'datetime', 'enum', 'custom'):
         raise ValueError(f'{dest}: unsupported type')
 
     for field in ('required', 'multiple', 'nullable'):
@@ -53,6 +62,8 @@ def _validate_value(spec: dict[str, Any]) -> None:
 
     if not isinstance(spec['help'], str) or not isinstance(spec['metavar'], str):
         raise ValueError(f'{dest}: help and metavar must be strings')
+
+    validate_metadata(spec)
 
     choices = spec['choices']
     if choices is not None and (not isinstance(choices, (list, tuple)) or not choices):
@@ -195,6 +206,20 @@ def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
                 or source not in available
             ):
                 raise ValueError(f'{path!r}: invalid parameter binding {parameter!r}')
+
+        rules = entry.get('rules', [])
+        if not isinstance(rules, list):
+            raise ValueError('command rules must be a list')
+
+        for rule in rules:
+            if not isinstance(rule, dict) or rule.get('kind') not in ('exclusive', 'at_least_one', 'requires'):
+                raise ValueError('invalid parameter relationship')
+
+            parameters = rule.get('parameters')
+            if not isinstance(parameters, list) or len(parameters) < (1 if rule['kind'] == 'at_least_one' else 2) or any(
+                not isinstance(parameter, str) or parameter not in available for parameter in parameters
+            ) or len(set(parameters)) != len(parameters):
+                raise ValueError('relationship parameters must be distinct, declared names')
 
         inherited[path] = scope
         seen[path] = entry

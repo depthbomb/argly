@@ -1,15 +1,19 @@
 from __future__ import annotations
+from enum import Enum
+from uuid import UUID
 from pathlib import Path
 from types import UnionType
 from pkgutil import walk_packages
+from datetime import date, datetime
 from importlib import import_module
 from collections.abc import Callable, Iterable
+from argly._references import resolve, validate_reference
 from argly.schema import empty_command, validate_registry
-from argly.declarations import Flag, Count, Option, Argument, Inherited
 from inspect import cleandoc, Parameter, signature, iscoroutinefunction
 from typing import Any, Union, Literal, get_args, Annotated, get_origin, get_type_hints
+from argly.declarations import Flag, Count, Range, Option, Argument, PathRule, Converter, Inherited
 
-def _shape(annotation: Any) -> tuple[str, bool, bool, list[Any] | None]:
+def _shape(annotation: Any, converter: Converter | None = None) -> tuple[str, bool, bool, list[Any] | None, dict[str, Any]]:
     nullable = False
     origin = get_origin(annotation)
     if origin in (Union, UnionType):
@@ -33,19 +37,42 @@ def _shape(annotation: Any) -> tuple[str, bool, bool, list[Any] | None]:
 
         annotation = type(choices[0])
 
-    supported = {str: 'str', int: 'int', float: 'float', bool: 'bool', Path: 'path'}
-    kind = supported.get(annotation)
+    details: dict[str, Any] = {}
+    kind: str | None
+    supported: dict[Any, str] = {str: 'str', int: 'int', float: 'float', bool: 'bool', Path: 'path', UUID: 'uuid', date: 'date', datetime: 'datetime'}
+    if converter is not None:
+        if choices is not None:
+            raise ValueError('Converter cannot be combined with Literal')
+
+        validate_reference(converter.parser)
+        if converter.serializer is not None:
+            validate_reference(converter.serializer)
+
+        kind = 'custom'
+        details['converter'] = converter.parser
+    elif isinstance(annotation, type) and issubclass(annotation, Enum):
+        members = list(annotation)
+        if not members or len({type(member.value) for member in members}) != 1 or type(members[0].value) not in (str, int):
+            raise ValueError('enum values must be nonempty and uniformly str or int')
+
+        kind = 'enum'
+        details['enum'] = f'{annotation.__module__}:{annotation.__qualname__}'
+        validate_reference(details['enum'])
+        details['enum_members'] = {str(member.value): member.name for member in members}
+        choices = list(details['enum_members'])
+    else:
+        kind = supported.get(annotation)
     if kind is None:
         raise ValueError(
-            f'unsupported CLI annotation {annotation!r}; use str, int, float, bool, Path, Literal, Optional, or list'
+            'unsupported CLI annotation ' + repr(annotation) + '; use a supported scalar, Enum, Literal, list, or Converter'
         )
 
     if nullable and multiple:
         raise ValueError('use list[T] with an empty default instead of Optional[list[T]]')
 
-    return kind, multiple, nullable, choices
+    return kind, multiple, nullable, choices, details
 
-def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
+def _default(value: Any, kind: str, multiple: bool, nullable: bool, details: dict[str, Any], converter: Converter | None = None) -> Any:
     if value is None and nullable:
         return None
 
@@ -53,7 +80,30 @@ def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
         if not isinstance(value, (list, tuple)):
             raise ValueError('list options and arguments need a list or tuple default')
 
-        return [_default(item, kind, False, False) for item in value]
+        return [_default(item, kind, False, False, details, converter) for item in value]
+
+    if kind == 'custom':
+        if converter is None or converter.serializer is None:
+            raise ValueError('custom defaults and choices need a Converter serializer')
+
+        text = resolve(converter.serializer)(value)
+        if not isinstance(text, str):
+            raise ValueError('a Converter serializer must return str')
+
+        return text
+
+    if kind == 'enum':
+        if not isinstance(value, Enum) or f'{type(value).__module__}:{type(value).__qualname__}' != details['enum']:
+            raise ValueError('default must be a member of the declared enum')
+
+        return str(value.value)
+
+    if kind in ('uuid', 'date', 'datetime'):
+        expected_type = {'uuid': UUID, 'date': date, 'datetime': datetime}[kind]
+        if type(value) is not expected_type:
+            raise ValueError(f'default {value!r} does not match {kind}')
+
+        return value.isoformat() if isinstance(value, date) else str(value)
 
     if kind == 'path' and isinstance(value, (str, Path)):
         return Path(value).as_posix()
@@ -81,6 +131,9 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
         raise ValueError(f'{path!r}: command handlers must declare -> int')
 
     entry = empty_command(path)
+    rules = getattr(function, '__argly_rules__', ())
+    if rules:
+        entry['rules'] = [{'kind': rule.kind, 'parameters': list(rule.parameters)} for rule in rules]
     entry['summary'] = summary if summary is not None else cleandoc(function.__doc__ or '')
     if not is_group:
         module_name = getattr(function, '__module__')  # noqa: B009
@@ -107,8 +160,16 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
             raise ValueError(f'{path!r}: {parameter.name} needs exactly one CLI marker')
 
         marker = markers[0]
-        kind, multiple, nullable, choices = _shape(underlying)
+        converters = [item for item in metadata if isinstance(item, Converter)]
+        if len(converters) > 1:
+            raise ValueError(f'{parameter.name}: only one Converter is allowed')
+
+        converter = converters[0] if converters else None
+        kind, multiple, nullable, choices, details = _shape(underlying, converter)
         if isinstance(marker, Inherited):
+            if any(isinstance(item, (Range, PathRule)) for item in metadata):
+                raise ValueError('declare inherited constraints on the ancestor parameter')
+
             if parameter.default is not Parameter.empty:
                 raise ValueError(
                     f'{parameter.name}: Inherited() takes its default from the ancestor'
@@ -124,12 +185,13 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
                     'multiple': multiple,
                     'nullable': nullable,
                     'choices': choices,
+                    **details,
                 }
             )
             continue
 
         required = parameter.default is Parameter.empty
-        default = None if required else _default(parameter.default, kind, multiple, nullable)
+        default = None if required else _default(parameter.default, kind, multiple, nullable, details, converter)
         if multiple and required:
             default = []
 
@@ -146,7 +208,7 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
             if choices is not None and list(marker.choices) != choices:
                 raise ValueError(f'{parameter.name}: Option choices disagree with Literal')
 
-            choices = [_default(item, kind, False, False) for item in marker.choices]
+            choices = [_default(item, kind, False, False, details, converter) for item in marker.choices]
 
         if isinstance(marker, (Flag, Count)) and choices is not None:
             raise ValueError(
@@ -168,7 +230,24 @@ def _definition(function: Callable[..., Any]) -> tuple[dict[str, Any], list[dict
             'required': required,
             'help': marker.help,
             'metavar': marker.metavar or parameter.name.upper(),
+            **details,
         }
+        constraints: dict[str, Any] = {}
+        for item in metadata:
+            if isinstance(item, Range):
+                if 'minimum' in constraints:
+                    raise ValueError(f'{parameter.name}: only one Range is allowed')
+
+                constraints.update(minimum=item.minimum, maximum=item.maximum)
+            elif isinstance(item, PathRule):
+                if 'path' in constraints:
+                    raise ValueError(f'{parameter.name}: only one PathRule is allowed')
+
+                constraints['path'] = {field: getattr(item, field) for field in ('exists', 'kind', 'readable', 'writable')}
+
+        if constraints:
+            spec['constraints'] = constraints
+
         if isinstance(marker, Option):
             canonical = '--' + parameter.name.replace('_', '-')
             spec['names'] = list(dict.fromkeys((canonical, *marker.names)))
@@ -235,6 +314,10 @@ def build_registry(
                     raise ValueError(
                         f'{path!r}: inherited parameter {request["parameter"]!r} has a different type'
                     )
+
+            for field in ('enum', 'converter'):
+                if source.get(field) != request.get(field):
+                    raise ValueError(f'{path!r}: inherited parameter has a different {field}')
 
             if request['choices'] is not None and request['choices'] != source['choices']:
                 raise ValueError(f'{path!r}: inherited Literal choices disagree with ancestor')
