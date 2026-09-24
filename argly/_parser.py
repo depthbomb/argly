@@ -92,7 +92,7 @@ def _convert(value: str, spec: dict[str, Any]) -> Any:
         raise UsageError(f'{spec["dest"]}: invalid {kind} value {value!r}') from error
 
     choices = spec['choices']
-    choice_value = str(result) if kind == 'path' else result
+    choice_value = result.as_posix() if kind == 'path' else result
     if choices is not None and choice_value not in choices:
         raise UsageError(f'{spec["dest"]}: choose from {", ".join(map(str, choices))}')
 

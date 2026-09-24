@@ -39,6 +39,14 @@ def _validate_value(spec: dict[str, Any]) -> None:
     if choices is not None and (not isinstance(choices, (list, tuple)) or not choices):
         raise ValueError(f'{dest}: choices must be nonempty')
 
+    if choices is not None and spec['type'] == 'path':
+        from pathlib import Path
+
+        if any(type(choice) is not str for choice in choices):
+            raise ValueError(f'{dest}: path choices must be strings')
+
+        spec['choices'] = [Path(choice).as_posix() for choice in choices]
+
 
 def validate_registry(registry: dict[str, Any]) -> dict[str, Any]:
     """Validate and detach a versioned registry before constructing parser tables."""

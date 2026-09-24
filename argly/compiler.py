@@ -58,7 +58,7 @@ def _default(value: Any, kind: str, multiple: bool, nullable: bool) -> Any:
         return [_default(item, kind, False, False) for item in value]
 
     if kind == 'path' and isinstance(value, (str, Path)):
-        return str(Path(value))
+        return Path(value).as_posix()
 
     expected = {'str': str, 'int': int, 'float': float, 'bool': bool, 'path': str}[kind]
     if type(value) is not expected:
