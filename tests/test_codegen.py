@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 from datetime import date
 from subprocess import run
-from types import ModuleType
+from tests import prepared
 from typing import Annotated
 from importlib import import_module
 from contextlib import contextmanager
@@ -86,16 +86,6 @@ def path_handler(path: Annotated[Path, Argument(), PathRule(exists=True)] = Path
 @command('async')
 async def async_handler(*, value: Annotated[int, Option()] = 5) -> int:
     return value
-
-def prepared(app, directory):
-    modules = {}
-    for path, text in artifacts(app, directory / 'generated.py').items():
-        if path.stem.endswith(('_runtime', '_metadata', '_help')):
-            module = ModuleType(path.stem)
-            exec(compile(text, str(path), 'exec'), module.__dict__)
-            modules[path.stem.rsplit('_', 1)[1]] = module
-
-    return App.from_generated(modules['runtime'], help_lookup=modules['help'].HELP.get, registry_loader=modules['metadata'].get_registry), modules
 
 @pytest.fixture
 def pair(tmp_path):
@@ -306,7 +296,7 @@ def test_entry_help_fallback_preserves_token_semantics(pair, tmp_path, monkeypat
             sys.modules.pop(path.stem, None)
 
 def test_help_with_a_space_inside_one_token_does_not_select_a_command(tmp_path, monkeypatch):
-    from test_parser import root as parser_root, remote, add, show
+    from tests.test_parser import add, show, remote, root as parser_root
 
     app = App('tool', [parser_root, remote, add, show])
     output = tmp_path / 'entry_spaces.py'
@@ -338,7 +328,7 @@ def test_specialized_converters_and_rules_preserve_errors(tmp_path, tokens):
     assert outcome(generated, tokens) == outcome(direct, tokens)
 
 def test_specialized_extended_types_match_generic_types(tmp_path):
-    from test_validation import extended
+    from tests.test_validation import extended
 
     direct = App('tool', [extended])
     generated, _ = prepared(direct, tmp_path)

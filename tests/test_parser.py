@@ -39,7 +39,7 @@ def show(*, verbose: Annotated[int, Inherited()]) -> int:
 def app(request, tmp_path):
     app = App('tool', [root, remote, add, show], windows_options=True)
     if request.param == 'generated':
-        from test_codegen import prepared
+        from tests import prepared
 
         app, _ = prepared(app, tmp_path)
     return app
