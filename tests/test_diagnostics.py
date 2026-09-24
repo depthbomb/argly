@@ -88,3 +88,15 @@ assert not any(name.startswith('examples.remote_cli.commands') for name in sys.m
 '''
     result = run([sys.executable, '-c', script], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+def test_path_diagnostics_keep_the_original_input():
+    from pathlib import Path
+
+    @command('')
+    def handler(*, file: Annotated[Path, Option(choices=['accepted.txt'])]) -> int:
+        return 0
+
+    with pytest.raises(UsageError) as caught:
+        App('tool', [handler]).parse(['--file=./wrong.txt'])
+    assert caught.value.code == 'invalid_choice'
+    assert caught.value.value == './wrong.txt'

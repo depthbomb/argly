@@ -115,6 +115,7 @@ def _checked_default(value: Any, spec: dict[str, Any]) -> Any:
     return value
 
 def _convert(value: str, spec: dict[str, Any], *, check: bool = True) -> Any:
+    original = value
     kind = spec['type']
     if kind == 'enum' and value not in spec['choices']:
         raise UsageError(f'{spec["dest"]}: choose from {", ".join(spec["choices"])}', code='invalid_choice', parameter=spec['dest'], value=value, suggestions=_suggest(value, spec['choices']))
@@ -137,12 +138,12 @@ def _convert(value: str, spec: dict[str, Any], *, check: bool = True) -> Any:
 
             result = parse_extended(value, spec)
     except (ValueError, OverflowError, TypeError) as error:
-        raise UsageError(f'{spec["dest"]}: invalid {kind} value {value!r}', code='invalid_value', parameter=spec['dest'], value=value) from error
+        raise UsageError(f'{spec["dest"]}: invalid {kind} value {original!r}', code='invalid_value', parameter=spec['dest'], value=original) from error
 
     choices = spec['choices']
     choice_value = value if kind in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom') else result
     if choices is not None and choice_value not in choices:
-        raise UsageError(f'{spec["dest"]}: choose from {", ".join(map(str, choices))}', code='invalid_choice', parameter=spec['dest'], value=value, suggestions=_suggest(value, map(str, choices)))
+        raise UsageError(f'{spec["dest"]}: choose from {", ".join(map(str, choices))}', code='invalid_choice', parameter=spec['dest'], value=original, suggestions=_suggest(value, map(str, choices)))
 
     if check and spec.get('constraints'):
         from argly._value_types import validate_constraints
@@ -150,7 +151,7 @@ def _convert(value: str, spec: dict[str, Any], *, check: bool = True) -> Any:
         try:
             validate_constraints(result, spec)
         except ValueError as error:
-            raise UsageError(f'{spec["dest"]}: {error}', code='constraint', parameter=spec['dest'], value=value) from error
+            raise UsageError(f'{spec["dest"]}: {error}', code='constraint', parameter=spec['dest'], value=original) from error
 
     return result
 
