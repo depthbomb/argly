@@ -8,6 +8,8 @@ class Option:
 
     __slots__ = ('names', 'help', 'metavar', 'choices')
 
+    # The public help= keyword describes the command-line parameter.
+    # noinspection PyShadowingBuiltins
     def __init__(
         self,
         *names: str,
@@ -38,6 +40,8 @@ class Argument:
 
     __slots__ = ('help', 'metavar')
 
+    # Keep the same help= keyword as Option.
+    # noinspection PyShadowingBuiltins
     def __init__(self, *, help: str = '', metavar: Optional[str] = None) -> None:
         self.help = help
         self.metavar = metavar

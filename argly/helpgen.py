@@ -102,6 +102,8 @@ def source(app: App, *, help_only: bool = False) -> str:
         lines.extend(('REGISTRY = ' + pformat(app.registry, width=100, sort_dicts=True), ''))
 
     lines.append('HELP = {')
+    # Generate help from the compiled tree, without using a possibly stale help lookup.
+    # noinspection PyProtectedMember
     for path, node in sorted(app._nodes.items()):
         lines.append(f'    {path!r}: {render(app.name, node)!r},')
 

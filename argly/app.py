@@ -67,6 +67,8 @@ class App:
         errors = sys.stderr if err is None else err
         try:
             invocation = self.parse(sys.argv[1:] if args is None else args)
+            # Invocation keeps the compiled node for dispatch within this module.
+            # noinspection PyProtectedMember
             node = invocation._node
             if invocation.help_requested or node.handler is None:
                 output.write(self.format_help(node.path))
