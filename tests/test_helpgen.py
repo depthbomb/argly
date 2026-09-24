@@ -75,14 +75,14 @@ assert app.run(['remote', 'add', 'origin', '-uabc']) == 0
 module = sys.modules['examples.remote_cli.commands.remote']
 assert 'examples.remote_cli.commands.root' not in sys.modules
 assert 'argly.compiler' not in sys.modules
-assert app._handlers == {'examples.remote_cli.commands.remote:add': module.add}
+assert app._handlers == {'remote add': module.add}
 assert app.run(['remote', 'add', 'origin', '-uabc']) == 0
 assert len(app._handlers) == 1
 assert app.run(['remote', 'list', '-vv']) == 0
 assert sys.modules['examples.remote_cli.commands.remote'] is module
 assert app._handlers == {
-    'examples.remote_cli.commands.remote:add': module.add,
-    'examples.remote_cli.commands.remote:list_remotes': module.list_remotes,
+    'remote add': module.add,
+    'remote list': module.list_remotes,
 }
 """
     result = run([sys.executable, '-c', script], cwd=PROJECT, capture_output=True, text=True)

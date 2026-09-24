@@ -318,3 +318,19 @@ def test_default_flag_and_counter_without_python_defaults():
         return verbose
 
     assert App('tool', [run]).parse([]).kwargs == {'force': False, 'verbose': 0}
+
+def test_factory_commands_dispatch_distinct_closures():
+    def factory(path, code):
+        @command(path)
+        def handler() -> int:
+            return code
+
+        return handler
+
+    first = factory('first', 11)
+    second = factory('second', 22)
+    assert first.__qualname__ == second.__qualname__
+    app = App('tool', [first, second])
+    assert app.run(['first']) == 11
+    assert app.run(['second']) == 22
+    assert app.run(['first']) == 11

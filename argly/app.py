@@ -49,7 +49,7 @@ class App:
             path = getattr(function, '__argly__')[0]  # noqa: B009
             handler = self._nodes[path].handler
             if handler is not None:
-                self._handlers[handler] = function
+                self._handlers[path] = function
 
     def parse(self, args: Sequence[str]) -> Invocation:
         """Parse explicit arguments without calling handlers or writing output."""
@@ -73,7 +73,7 @@ class App:
 
                 return 0
 
-            handler = self._handlers.get(node.handler)
+            handler = self._handlers.get(node.path)
             if handler is None:
                 module_name, _, attribute = node.handler.partition(':')
                 target: Any = import_module(module_name)
@@ -84,7 +84,7 @@ class App:
                     raise TypeError(f'handler {node.handler!r} is not callable')
 
                 handler = target
-                self._handlers[node.handler] = handler
+                self._handlers[node.path] = handler
 
             code = handler(**invocation.kwargs)
             if type(code) is not int:
