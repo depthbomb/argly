@@ -127,9 +127,9 @@ def _runtime_source(app: App) -> str:
     # noinspection PyProtectedMember
     nodes = app._nodes
     specs: dict[str, _Code] = {}
+    imports: set[str] = set()
     lines = [
-        'from types import MappingProxyType as M',
-        'from argly._parser import _suggest, UsageError', '',
+        'from types import MappingProxyType as M', '',
         f'FORMAT_VERSION = {FORMAT_VERSION}', f'NAME = {app.name!r}',
         f'WINDOWS_OPTIONS = {app.registry["windows_options"]!r}', '',
     ]
@@ -146,6 +146,12 @@ def _runtime_source(app: App) -> str:
             symbol = _Code(f'_s{index}')
             specs[text] = symbol
             if compact.get('action', 'value') == 'value':
+                if compact['type'] != 'str' or compact['choices'] is not None:
+                    imports.add('UsageError')
+
+                if compact['choices'] is not None:
+                    imports.add('_suggest')
+
                 converter = _Code(f'_convert{index}')
                 lines.extend(_conversion_source(compact, converter))
                 compact['_convert'] = converter
@@ -153,7 +159,11 @@ def _runtime_source(app: App) -> str:
             if compact['type'] in ('int', 'float') and compact.get('constraints'):
                 validator = _Code(f'_validate{index}')
                 lines.extend((f'def {validator}(value):', '    if value is None:', '        return value', ''))
-                lines.extend(_bounds_source(compact, 'value', 'str(value)'))
+                bounds = _bounds_source(compact, 'value', 'str(value)')
+                if bounds:
+                    imports.add('UsageError')
+
+                lines.extend(bounds)
                 lines.extend(('    return value', ''))
                 compact['_validate'] = validator
 
@@ -179,6 +189,7 @@ def _runtime_source(app: App) -> str:
 
         rule_key = _literal(node.rules)
         if node.rules and rule_key not in rules:
+            imports.add('UsageError')
             validator = _Code(f'_rules{len(rules)}')
             rules[rule_key] = validator
             lines.extend(_rules_source(node.rules, validator))
@@ -191,6 +202,9 @@ def _runtime_source(app: App) -> str:
         )
 
     lines.extend(('', 'COMMANDS = ' + _literal(commands), ''))
+    if imports:
+        lines.insert(1, 'from argly._parser import ' + ', '.join(sorted(imports, key=lambda name: (len(name), name))))
+        lines[:2] = sorted(lines[:2], key=lambda line: (len(line), line))
 
     return '\n'.join(lines)
 
