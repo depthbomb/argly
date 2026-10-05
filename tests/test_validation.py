@@ -3,6 +3,7 @@ import pytest
 from enum import Enum
 from uuid import UUID
 from pathlib import Path
+from tests import prepared
 from typing import Annotated
 from argly.helpgen import source
 from datetime import date, datetime
@@ -17,6 +18,10 @@ class Level(Enum):
     HIGH = 2
 
 ZERO_UUID = UUID(int=0)
+
+@command('large')
+def large_integer(number: Annotated[int, Argument(), Range(-10 ** 400, 10 ** 400)] = 0) -> int:
+    return 0
 
 @command('types')
 def extended(
@@ -60,6 +65,25 @@ def test_ranges_and_count_validation():
         app.parse(['--number=0'])
     with pytest.raises(UsageError, match='at most 2'):
         app.parse(['-ccc'])
+
+@pytest.mark.parametrize('backend', ['direct', 'registry', 'prepared'])
+def test_integer_range_bounds_do_not_require_float_conversion(backend, tmp_path):
+    app = App('tool', [large_integer])
+    if backend == 'registry':
+        app = App.from_registry(app.registry)
+    elif backend == 'prepared':
+        app, _ = prepared(app, tmp_path)
+
+    assert app.parse(['large']).kwargs == {'number': 0}
+    for number in (-10 ** 400, 10 ** 400):
+        assert app.parse(['large', str(number)]).kwargs == {'number': number}
+
+    for number in (-10 ** 400 - 1, 10 ** 400 + 1):
+        with pytest.raises(UsageError) as error:
+            app.parse(['large', str(number)])
+        assert error.value.code == 'constraint'
+        assert error.value.parameter == 'number'
+        assert error.value.value == str(number)
 
 def test_path_checks_happen_at_parse_time(tmp_path):
     missing = tmp_path / 'missing'
@@ -145,7 +169,7 @@ def test_group_relationships_are_inherited():
     with pytest.raises(UsageError, match='mutually exclusive'):
         app.parse(['--quiet', 'child', '--verbose'])
 
-@pytest.mark.parametrize('constraint', [Range(5, 1), Range(float('nan')), PathRule(kind='bad')])
+@pytest.mark.parametrize('constraint', [Range(5, 1), Range(float('nan')), Range(float('inf')), Range(maximum=float('-inf')), Range(True), Range('1'), PathRule(kind='bad')])
 def test_invalid_constraint_metadata(constraint):
     @command('')
     def bad(value) -> int:

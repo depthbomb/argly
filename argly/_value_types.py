@@ -91,7 +91,12 @@ def validate_metadata(spec: dict[str, Any]) -> None:
         if bound is not None:
             from math import isfinite
 
-            if kind not in ('int', 'float') or not isinstance(bound, (int, float)) or isinstance(bound, bool) or not isfinite(bound):
+            if (
+                kind not in ('int', 'float')
+                or not isinstance(bound, (int, float))
+                or isinstance(bound, bool)
+                or isinstance(bound, float) and not isfinite(bound)
+            ):
                 raise ValueError('range bounds must be finite numbers on numeric parameters')
 
     if rules.get('minimum') is not None and rules.get('maximum') is not None and rules['minimum'] > rules['maximum']:

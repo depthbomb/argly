@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Integer range bounds larger than the floating-point limit no longer raise `OverflowError` during application construction.
+
 ## [0.2.0] - 2026-09-24
 
 ### Added
