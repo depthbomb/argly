@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Avoid a second registry validation when constructing an app from command declarations.
+- Copy unconstrained scalar positional defaults without processing each item in Python or copying the result twice.
+- Add construction and positional-default workloads to the development benchmark.
+
 ### Fixed
 
 - Integer range bounds larger than the floating-point limit no longer raise `OverflowError` during application construction.

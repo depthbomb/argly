@@ -98,6 +98,12 @@ def _default_value(spec: Mapping[str, Any], *, check: bool = False) -> Any:
     default = spec['default']
     if check and default is not None:
         if spec['multiple']:
+            if not default:
+                return []
+
+            if spec['type'] in ('str', 'int', 'float', 'bool') and not spec.get('constraints'):
+                return list(default)
+
             return [_checked_default(item, spec) for item in default]
 
         return _checked_default(default, spec)
@@ -339,7 +345,7 @@ def parse(root: Node, argv: list[str]) -> ParseResult:
                     raise UsageError(f'missing required argument {dest}', code='missing_argument', parameter=dest)
 
                 converter = spec.get('_convert', _convert)
-                result[dest] = [converter(value, spec) for value in rest] if rest else _default_value(spec, check=True)[:]
+                result[dest] = [converter(value, spec) for value in rest] if rest else _default_value(spec, check=True)
                 if rest:
                     supplied.add(dest)
                 offset = len(positionals)

@@ -192,7 +192,7 @@ class App:
     ) -> App:
         """Load generated metadata without discovering or importing command modules."""
         app = cls.__new__(cls)
-        app._initialize(registry, help_lookup, resources)
+        app._initialize(validate_registry(registry), help_lookup, resources)
 
         return app
 
@@ -307,7 +307,8 @@ class App:
         help_lookup: Callable[[str], str | None] | None,
         resources: Mapping[str, str | Callable[[Invocation], Any]] | None,
     ) -> None:
-        self._registry = validate_registry(registry)
+        # Both callers provide detached metadata validated at their entry point.
+        self._registry = registry
         self._registry_loader = None
         self.name: str = self.registry['name']
         self._configure(help_lookup, resources)

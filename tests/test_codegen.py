@@ -87,6 +87,35 @@ def path_handler(path: Annotated[Path, Argument(), PathRule(exists=True)] = Path
 async def async_handler(*, value: Annotated[int, Option()] = 5) -> int:
     return value
 
+@command('strings')
+def string_defaults(items: Annotated[list[str], Argument()] = ('first', 'second')) -> int:
+    return len(items)
+
+@command('integers')
+def integer_defaults(items: Annotated[list[int], Argument()] = (1, 2)) -> int:
+    return len(items)
+
+@command('floats')
+def float_defaults(items: Annotated[list[float], Argument()] = (1.0, 2.0)) -> int:
+    return len(items)
+
+@pytest.mark.parametrize(('handler', 'path', 'expected', 'tokens', 'explicit'), [
+    (string_defaults, 'strings', ['first', 'second'], ['third'], ['third']),
+    (integer_defaults, 'integers', [1, 2], ['3'], [3]),
+    (float_defaults, 'floats', [1.0, 2.0], ['3.5'], [3.5]),
+])
+def test_variadic_scalar_defaults_are_fresh_lists(tmp_path, handler, path, expected, tokens, explicit):
+    direct = App('tool', [handler])
+    generated, _ = prepared(direct, tmp_path)
+    for app in (direct, App.from_registry(direct.registry), generated):
+        values = app.parse([path]).kwargs['items']
+        assert type(values) is list
+        assert values == expected
+        values.clear()
+        assert app.parse([path]).kwargs['items'] == expected
+        assert app.parse([path, *tokens]).kwargs['items'] == explicit
+        assert app.run([path]) == len(expected)
+
 @pytest.fixture
 def pair(tmp_path):
     direct = App('tool', [root, handler, resource_handler, path_handler, async_handler], windows_options=True)

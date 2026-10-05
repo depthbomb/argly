@@ -311,7 +311,7 @@ python -X utf8 benchmarks/compare.py --processes 9 --batches 3 --target-ms 100 -
 
 The script prints Markdown tables and saves every timing sample, worker loop count, source hash, package version, command selection, and execution order to JSON. The [dependency pins](benchmarks/requirements.txt) match this run. Unexpected exceptions fail the correctness checks.
 
-For argly-specific work, the original [benchmark script](benchmarks/bench.py) compares warm parsing with `argparse`, help lookup, and prepared versus discovered app loading. Its startup timers begin inside fresh Python processes, so they exclude interpreter launch time and aren't directly comparable to the startup columns above.
+For argly-specific work, the original [benchmark script](benchmarks/bench.py) compares warm parsing with `argparse`, help lookup, and prepared versus discovered app loading. It also measures app construction and positional defaults at several sizes, checking default isolation before timing. Its startup timers begin inside fresh Python processes, so they exclude interpreter launch time and aren't directly comparable to the startup columns above.
 
 ### Development checks
 

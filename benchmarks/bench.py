@@ -107,6 +107,64 @@ def _overridden_defaults(loops, rounds):
 
     return results
 
+def _positional_defaults(loops, rounds):
+    results = {}
+    for size in (0, 8, 1000):
+        defaults = tuple(str(index) for index in range(size))
+
+        @command('')
+        def positional(items: Annotated[list[str], Argument()] = defaults) -> int:
+            return len(items)
+
+        app = App('tool', [positional])
+        expected = list(defaults)
+        first = app.parse([]).kwargs['items']
+        assert first == expected
+        first.append('changed')
+        assert app.parse([]).kwargs['items'] == expected
+        assert app.parse(['explicit']).kwargs['items'] == ['explicit']
+        for _ in range(1000):
+            app.parse([])
+
+        samples = repeat(lambda app=app: app.parse([]), number=loops, repeat=rounds)
+        results[str(size)] = {
+            'parse_us': median(samples) * 1e6 / loops,
+            'samples_s': samples,
+        }
+
+    return results
+
+def _construction(loops, rounds):
+    def make_command(index):
+        @command(f'command{index}')
+        def child(
+            name: Annotated[str, Argument()],
+            *,
+            number: Annotated[int, Option('-n')] = 1,
+            tags: Annotated[list[str], Option('-t')] = ('default',),
+            force: Annotated[bool, Flag('-f')] = False,
+        ) -> int:
+            return number
+
+        return child
+
+    results = {}
+    for size in (1, 50, 500):
+        commands = [make_command(index) for index in range(size)]
+        count = max(1, min(loops, 1000 // size))
+        app = App('tool', commands)
+        assert app.parse([f'command{size - 1}', 'name']).kwargs == {
+            'name': 'name', 'number': 1, 'tags': ['default'], 'force': False,
+        }
+        samples = repeat(lambda commands=commands: App('tool', commands), number=count, repeat=rounds)
+        results[str(size)] = {
+            'construct_ms': median(samples) * 1e3 / count,
+            'loops': count,
+            'samples_s': samples,
+        }
+
+    return results
+
 def _startup(script, rounds):
     measured = 'from time import perf_counter_ns; start=perf_counter_ns(); ' + script
     measured += '; print((perf_counter_ns()-start)/1e6)'
@@ -219,6 +277,8 @@ def main():
     results['parser_module'] = sys.modules['argly._parser'].__file__
     results['paired_backends'] = _compare_backends(args.loops, args.rounds)
     results['overridden_defaults'] = _overridden_defaults(args.loops, args.rounds)
+    results['positional_defaults'] = _positional_defaults(args.loops, args.rounds)
+    results['construction'] = _construction(args.loops, args.rounds)
     output = json.dumps(results, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
