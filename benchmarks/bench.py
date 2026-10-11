@@ -2,6 +2,7 @@ import sys
 import json
 from pathlib import Path
 from timeit import repeat
+from time import perf_counter
 from argly import Invocation
 from statistics import median
 from argparse import ArgumentParser
@@ -168,11 +169,20 @@ def _construction(loops, rounds):
 def _startup(script, rounds):
     measured = 'from time import perf_counter_ns; start=perf_counter_ns(); ' + script
     measured += '; print((perf_counter_ns()-start)/1e6)'
-    samples = [
-        float(check_output([sys.executable, '-c', measured], text=True)) for _ in range(rounds)
-    ]
+    samples = []
+    process_samples = []
+    for _ in range(rounds):
+        start = perf_counter()
+        output = check_output([sys.executable, '-c', measured], text=True)
+        process_samples.append((perf_counter() - start) * 1000)
+        samples.append(float(output))
 
-    return {'median_ms': median(samples), 'samples_ms': samples}
+    return {
+        'median_ms': median(samples),
+        'samples_ms': samples,
+        'process_median_ms': median(process_samples),
+        'process_samples_ms': process_samples,
+    }
 
 
 def _compare_backends(loops, rounds):
@@ -267,6 +277,14 @@ def main():
         'import_argparse': _startup('import argparse', args.rounds),
         'generated_app': _startup(
             'from examples.remote_cli.generated import load; app=load()',
+            args.rounds,
+        ),
+        'generated_parse': _startup(
+            "from examples.remote_cli.generated import load; app=load(); assert app.parse(['remote', 'list']).kwargs == {'verbose': 0}",
+            args.rounds,
+        ),
+        'generated_help': _startup(
+            "from io import StringIO; from examples.remote_cli.generated import main; assert main(['remote', '--help'], out=StringIO()) == 0",
             args.rounds,
         ),
         'discovered_app': _startup(

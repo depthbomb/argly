@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+__lazy_modules__ = ('typing',)
+
 from typing import Any
 from collections.abc import Mapping, Callable, Iterable, Sequence
 

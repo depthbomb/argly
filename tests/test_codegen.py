@@ -278,6 +278,10 @@ assert 'argly.codegen' not in sys.modules
 assert 'argly.helpgen' not in sys.modules
 assert not any(name.startswith('examples.remote_cli.commands') for name in sys.modules)
 assert not any(name.endswith(('_metadata', '_help')) for name in sys.modules)
+if sys.version_info >= (3, 15):
+    assert not {'argly.declarations', 'argly.schema', 'argly._references', 'argly._value_types'} & sys.modules.keys()
+    if sys.modules['argly._parser'].__file__.endswith('.py'):
+        assert 'typing' not in sys.modules
 '''
     result = run([sys.executable, '-c', script], cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

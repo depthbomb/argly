@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+__lazy_modules__ = ('typing', 'argly.schema', 'argly._references')
+
 import sys
 from types import ModuleType
 from typing import Any, TextIO
