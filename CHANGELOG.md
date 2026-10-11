@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.2] - 2026-10-10
+
+### Added
+
+- Python 3.15 support while keeping Python 3.14 as the minimum.
+- CI coverage for Python 3.14 and 3.15 on Linux, Windows, and macOS.
+
+### Changed
+
+- Improve Python 3.15 startup with lazy imports and prepared parsing with frozen tables.
+
 ## [0.2.1] - 2026-10-04
 
 ### Changed
