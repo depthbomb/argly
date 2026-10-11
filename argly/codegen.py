@@ -18,12 +18,12 @@ from argly._generated import FORMAT_VERSION
 class _Code(str):
     """An expression produced by the generator, never declaration text."""
 
-def _literal(value: Any) -> str:
+def _literal(value: Any, *, mapping: str = 'M') -> str:
     if isinstance(value, _Code):
         return str(value)
 
     if isinstance(value, Mapping):
-        return 'M({' + ', '.join(f'{key!r}: {_literal(item)}' for key, item in value.items()) + '})'
+        return mapping + '({' + ', '.join(f'{key!r}: {_literal(item)}' for key, item in value.items()) + '})'
 
     if isinstance(value, (list, tuple)):
         return '(' + ''.join(_literal(item) + ', ' for item in value) + ')'
@@ -129,7 +129,11 @@ def _runtime_source(app: App) -> str:
     specs: dict[str, _Code] = {}
     imports: set[str] = set()
     lines = [
-        'from types import MappingProxyType as M', '',
+        'from types import MappingProxyType as D', '',
+        'try:',
+        '    from builtins import frozendict as M',
+        'except ImportError:',
+        '    M = D', '',
         f'FORMAT_VERSION = {FORMAT_VERSION}', f'NAME = {app.name!r}',
         f'WINDOWS_OPTIONS = {app.registry["windows_options"]!r}', '',
     ]
@@ -179,6 +183,8 @@ def _runtime_source(app: App) -> str:
         arguments = tuple(parameter(spec) for spec in node.arguments)
         lookup = {name: parameter(spec) for name, spec in node.lookup.items()}
         defaults = {spec['dest']: spec['default'] for spec in node.options}
+        # Older format-2 readers need defaults.copy() to return a mutable dict.
+        frozen_defaults = _Code(_literal(defaults, mapping='D'))
         checked = tuple(parameter(spec) for spec in node.options if spec['type'] in ('path', 'uuid', 'date', 'datetime', 'enum', 'custom') or spec.get('constraints'))
         binding_key = repr(tuple(node.bindings.items()))
         if binding_key not in bindings:
@@ -196,7 +202,7 @@ def _runtime_source(app: App) -> str:
 
         commands[path] = (
             node.handler, node.is_async, node.bindings, options, arguments,
-            lookup, defaults, node.required, node.mutable_defaults, checked,
+            lookup, frozen_defaults, node.required, node.mutable_defaults, checked,
             node.rules, node.resources, {name: child.path for name, child in node.children.items()},
             bindings[binding_key], rules.get(rule_key),
         )

@@ -44,6 +44,7 @@ class _Nodes(Mapping[str, Node]):
             node.mutable_defaults, node.checked_defaults, node.rules,
             node.resources, children, node.bind, node.validate,
         ) = data
+        node.defaults = dict(node.defaults)
         node.windows_options = self._windows
         node.children = _Children(children, self)
         self._cache[path] = node

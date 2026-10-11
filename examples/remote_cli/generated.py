@@ -5,15 +5,15 @@ def _module(name):
     return _import_module('.' + name, __package__) if __package__ else _import_module(name)
 
 def get_help(path):
-    return _module('_generated_189297381fba64746d83_help').HELP.get(path)
+    return _module('_generated_ef702f5fbf5553567aee_help').HELP.get(path)
 
 def get_registry():
-    return _module('_generated_189297381fba64746d83_metadata').get_registry()
+    return _module('_generated_ef702f5fbf5553567aee_metadata').get_registry()
 
 def load(*, resources=None):
     from argly import App
 
-    return App.from_generated(_module('_generated_189297381fba64746d83_runtime'), help_lookup=get_help, registry_loader=get_registry, resources=resources)
+    return App.from_generated(_module('_generated_ef702f5fbf5553567aee_runtime'), help_lookup=get_help, registry_loader=get_registry, resources=resources)
 
 def main(args=None, *, out=None, err=None, resources=None):
     from sys import argv, stdout

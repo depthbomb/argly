@@ -181,6 +181,21 @@ def test_prepared_load_skips_registry_validation(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='regenerate'):
         App.from_generated(modules['runtime'], help_lookup=modules['help'].HELP.get, registry_loader=modules['metadata'].get_registry)
 
+def test_prepared_defaults_still_work_with_format_two_readers(tmp_path):
+    direct = App('tool', [root, handler])
+    generated, modules = prepared(direct, tmp_path)
+    for path, data in modules['runtime'].COMMANDS.items():
+        defaults = data[6]
+        copied = defaults.copy()
+        copied['reader_local'] = 1
+        assert 'reader_local' not in defaults
+        # Earlier readers retain the table's defaults instead of copying on load.
+        generated._nodes[path].defaults = defaults
+
+    assert generated.parse(['run']).kwargs == direct.parse(['run']).kwargs
+    tokens = ['run', '--number=3', '--label=b']
+    assert generated.parse(tokens).kwargs == direct.parse(tokens).kwargs
+
 def test_dynamic_path_checks_and_async_execution(pair, tmp_path, monkeypatch):
     direct, generated = pair
     monkeypatch.chdir(tmp_path)
